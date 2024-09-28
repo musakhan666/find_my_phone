@@ -34,10 +34,7 @@ class AppStatusManager(context: Context) {
      */
     fun setServiceActive(isActive: Boolean) {
         sharedPreferences.edit().putBoolean(KEY_IS_ACTIVE, isActive).apply()
-        if (isActive.not()) setPreference("startButton", "YES") else setPreference(
-            "startButton",
-            "NO"
-        )
+        if (isActive.not()) setPreference("startButton", "YES") else setPreference("startButton", "NO")
     }
 
     private fun setFlashActive(isActive: Boolean) {
@@ -64,7 +61,7 @@ class AppStatusManager(context: Context) {
      */
 
     fun isServiceActive(): Boolean {
-        return sharedPreferences.getBoolean(KEY_IS_ACTIVE, false)
+        return sharedPreferences.getBoolean(KEY_IS_ACTIVE, true)
     }
 
     fun isFlashActive(): Boolean {

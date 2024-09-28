@@ -143,7 +143,9 @@ class HomeViewModel(application: Context) : ViewModel() {
     }
 
     fun submit(keyword: String?) {
-        if (keyword.isNullOrEmpty().not()) serviceStatusManager.setKeywordForVoiceRecognition(keyword)
+        if (keyword.isNullOrEmpty().not()) serviceStatusManager.setKeywordForVoiceRecognition(
+            keyword
+        )
     }
 
     fun setSound() {
