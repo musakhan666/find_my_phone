@@ -39,7 +39,7 @@ class AppStatusManager(context: Context) {
 
     private fun setFlashActive(isActive: Boolean) {
         sharedPreferences.edit().putBoolean(KEY_IS_FLASH, isActive).apply()
-        if (isActive) setPreference("flash", "YES") else setPreference("vibration", "NO")
+        if (isActive) setPreference("flash", "YES") else setPreference("flash", "NO")
 
     }
 
