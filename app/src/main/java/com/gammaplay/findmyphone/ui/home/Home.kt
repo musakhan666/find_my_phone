@@ -258,8 +258,7 @@ fun MenuItem(
     var isActivationSheetOpen by rememberSaveable { mutableStateOf(false) }
     val cornerRadius = 14.dp
     var isSoundPlaying by remember { mutableStateOf(false) }
-    val textFieldValue by remember { homeViewModel.textFieldValue }
-    homeViewModel.setTextFieldValue()
+
 
 
 
@@ -492,6 +491,8 @@ fun MenuItem(
             onDismissRequest = { isActivationSheetOpen = false },
             containerColor = colorResource(id = R.color.background)
         ) {
+            val textFieldValue by remember { homeViewModel.textFieldValue }
+
             Column(modifier = Modifier.fillMaxWidth()) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(

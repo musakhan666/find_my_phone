@@ -1,7 +1,11 @@
 package com.gammaplay.findmyphone.utils.service
 
 import android.Manifest
-import android.app.*
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,7 +20,11 @@ import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.media.RingtoneManager
 import android.net.Uri
-import android.os.*
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.speech.RecognitionListener
@@ -26,12 +34,20 @@ import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.gammaplay.findmyphone.ui.main.MainActivity
 import com.gammaplay.findmyphone.R
+import com.gammaplay.findmyphone.ui.main.MainActivity
 import com.gammaplay.findmyphone.utils.AppStatusManager
 import com.musicg.api.ClapApi
 import com.musicg.wave.WaveHeader
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
 /**
@@ -97,8 +113,6 @@ class DetectionServiceForeground : Service() {
         Log.d(TAG, "Service Created")
 
 
-
-
         appStatusManager = AppStatusManager(context = this)
 
         // Initialize Notification and start foreground
@@ -110,8 +124,8 @@ class DetectionServiceForeground : Service() {
 
         // Initialize Speech Recognizer
         initializeSpeechRecognizer()
-//
-//        // Initialize Recognition Intent
+
+        // Initialize Recognition Intent
         initializeRecognitionIntent()
 
         // Check and apply activation settings
@@ -252,14 +266,19 @@ class DetectionServiceForeground : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service Destroyed")
+        clearAllData()
+
+
+    }
+
+    private fun clearAllData() {
         stopAllFunctions()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(stopFunctionalityReceiver)
         isRecording = false
         stopRecording()
-        serviceScope.cancel() // Cancel all coroutines
+        serviceScope.cancel()
         serviceFlashScope.cancel()
         serviceVibScope.cancel()
-
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -334,6 +353,9 @@ class DetectionServiceForeground : Service() {
      * Initialize the Recognition Intent for SpeechRecognizer.
      */
     private fun initializeRecognitionIntent() {
+
+        muteSpeechRecognizerMicBeepSound(true)
+
         recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en")
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en")
@@ -449,7 +471,6 @@ class DetectionServiceForeground : Service() {
     private fun onDetection() {
         Log.d(TAG, "Detection triggered")
         serviceScope.launch {
-            overrideMediaVolume()
             stopAllDetection()
             playRingtone(getRingtoneUri())
             vibrate()
@@ -457,18 +478,6 @@ class DetectionServiceForeground : Service() {
         }
     }
 
-
-    private fun overrideMediaVolume(desiredVolume: Int = 15) {
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val volume = when {
-            desiredVolume < 0 -> 0
-            desiredVolume > maxVolume -> maxVolume
-            else -> desiredVolume
-        }
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0)
-        Log.d(TAG, "Media volume overridden to $volume")
-    }
 
     /**
      * Play the ringtone for a specified duration.
@@ -614,9 +623,7 @@ class DetectionServiceForeground : Service() {
             Log.d(TAG, "SpeechRecognizer began speaking")
         }
 
-        override fun onRmsChanged(rmsdB: Float) {
-            // Handle RMS level changes if needed
-        }
+        override fun onRmsChanged(rmsdB: Float) {}
 
         override fun onBufferReceived(buffer: ByteArray?) {}
 
@@ -632,11 +639,13 @@ class DetectionServiceForeground : Service() {
 
         override fun onResults(results: Bundle?) {
             Log.d(TAG, "SpeechRecognizer results received")
+
             results?.let {
                 val matches = it.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 matches?.let { resultList ->
                     if (resultList.any { it.contains(keyword ?: "", ignoreCase = true) }) {
                         Log.d(TAG, "Keyword '${keyword}' detected in speech")
+                        muteSpeechRecognizerMicBeepSound(false)
                         onDetection()
                     }
                 }
@@ -646,6 +655,15 @@ class DetectionServiceForeground : Service() {
 
         override fun onPartialResults(partialResults: Bundle?) {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    fun muteSpeechRecognizerMicBeepSound(mute: Boolean) {
+        val manager = getSystemService(AUDIO_SERVICE) as AudioManager
+        manager.setStreamMute(AudioManager.STREAM_NOTIFICATION, mute)
+        manager.setStreamMute(AudioManager.STREAM_ALARM, mute)
+        manager.setStreamMute(AudioManager.STREAM_MUSIC, mute)
+        manager.setStreamMute(AudioManager.STREAM_RING, mute)
+        manager.setStreamMute(AudioManager.STREAM_SYSTEM, mute)
     }
 
     /**
