@@ -1,14 +1,19 @@
 package com.gammaplay.findmyphone.utils.service
 
+import android.Manifest
 import android.app.*
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraManager
+import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioRecord
 import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.*
@@ -18,11 +23,14 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.gammaplay.findmyphone.ui.main.MainActivity
 import com.gammaplay.findmyphone.R
 import com.gammaplay.findmyphone.utils.AppStatusManager
+import com.musicg.api.ClapApi
+import com.musicg.wave.WaveHeader
 import kotlinx.coroutines.*
 
 
@@ -30,25 +38,36 @@ import kotlinx.coroutines.*
  * Foreground Service that detects claps and speech based on the activation type.
  * Handles "clap", "speech", and "both" activation modes.
  */
-class DetectionServiceForeground : Service(),
-    OnSignalsDetectedListener {
+class DetectionServiceForeground : Service() {
 
     companion object {
         const val ACTION_STOP_FUNCTIONALITY = "com.gammaplay.findmyphone.ACTION_STOP_FUNCTIONALITY"
-        private const val TAG = "DetectionService"
-        private const val NOTIFICATION_CHANNEL_ID = "speech_recognition_channel"
+        const val TAG = "DetectionService"
+        const val NOTIFICATION_CHANNEL_ID = "speech_recognition_channel"
         private const val NOTIFICATION_ID = 1
         private const val DETECTION_DURATION: Long = 10000 // 10 seconds
-        private const val DOUBLE_CLAP_THRESHOLD: Long = 500 // milliseconds
-        private const val DETECTION_COOLDOWN: Long = 2000 // milliseconds
     }
+
 
     // Detection Mode Flags
     private var isClapDetectionActive = false
     private var isSpeechDetectionActive = false
+    private var isDeviceFound = false
+
+    private lateinit var audioRecord: AudioRecord
+    private lateinit var clapApi: ClapApi
+    private val buffer = ByteArray(4096)
+    private var isRecording = false
 
     // Coroutine Scope for managing coroutines
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    private val serviceJob = Job()
+    private val serviceFlashScope = CoroutineScope(Dispatchers.IO + serviceJob)
+
+
+    private val serviceVibJob = Job()
+    private val serviceVibScope = CoroutineScope(Dispatchers.IO + serviceVibJob)
 
     // MediaPlayer for ringtone playback
     private var mediaPlayer: MediaPlayer? = null
@@ -72,18 +91,14 @@ class DetectionServiceForeground : Service(),
     // Handler for scheduling mode switches
     private val handler = Handler(Looper.getMainLooper())
 
-    // Clap Detection Variables
-    private var lastClapTime: Long = 0
-    private var isDoubleClap: Boolean = false
-    private var canDetect: Boolean = true
-
-    // Recorder and Detector Threads
-    private var detectorThread: DetectorThread? = null
-    private var recorderThread: RecorderThread? = null
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service Created")
+
+
+
+
         appStatusManager = AppStatusManager(context = this)
 
         // Initialize Notification and start foreground
@@ -95,36 +110,44 @@ class DetectionServiceForeground : Service(),
 
         // Initialize Speech Recognizer
         initializeSpeechRecognizer()
-
-        // Initialize Recognition Intent
+//
+//        // Initialize Recognition Intent
         initializeRecognitionIntent()
 
         // Check and apply activation settings
         checkStatus()
+
+
     }
+
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service Started")
+
         when (activationType) {
             "none" -> {
                 stopAllDetection()
             }
+
             "clap" -> {
                 if (!isClapDetectionActive) {
                     startClapDetection()
                 }
             }
+
             "speech" -> {
                 if (!isSpeechDetectionActive) {
                     startSpeechDetection()
                 }
             }
+
             "both" -> {
                 if (!isClapDetectionActive && !isSpeechDetectionActive) {
                     startClapDetection()
                     scheduleSwitchToSpeech()
                 }
             }
+
             else -> {
                 Log.e(TAG, "Unknown activation type: $activationType")
             }
@@ -132,12 +155,111 @@ class DetectionServiceForeground : Service(),
         return START_STICKY
     }
 
+    private fun startClapDetection() {
+        initAudioRecorder()
+        isRecording = true
+        Thread { detectClaps() }.start()
+        isClapDetectionActive = true
+        Log.d(TAG, "Clap detection started")
+    }
+
+
+    private fun initAudioRecorder() {
+        val sampleRate = 44100
+        val channelConfig = AudioFormat.CHANNEL_IN_MONO
+        val encoding = AudioFormat.ENCODING_PCM_16BIT
+        if (ActivityCompat.checkSelfPermission(
+                this, Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        audioRecord = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            sampleRate,
+            channelConfig,
+            encoding,
+            AudioRecord.getMinBufferSize(sampleRate, channelConfig, encoding)
+        )
+
+        if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+            Log.e(TAG, "AudioRecord initialization failed")
+            return
+        }
+
+        val waveHeader = WaveHeader().apply {
+            channels = 1
+            bitsPerSample = 16
+            this.sampleRate = sampleRate
+        }
+        clapApi = ClapApi(waveHeader)
+        audioRecord.startRecording()
+        Log.d(TAG, "Audio recording started")
+    }
+
+    // Detect claps
+    private fun detectClaps() {
+        var firstClapTime: Long? = null  // To store the time of the first clap
+        val maxIntervalBetweenClaps = 500  // Max interval between claps (in ms)
+
+        try {
+            while (isRecording) {
+                val readBytes = audioRecord.read(buffer, 0, buffer.size)
+                if (readBytes > 0) {
+                    if (clapApi.isClap(buffer)) {
+                        val currentTime = System.currentTimeMillis()
+
+                        // If this is the first clap, save the time
+                        if (firstClapTime == null) {
+                            firstClapTime = currentTime
+                            Log.d(TAG, "First clap detected!")
+                        } else {
+                            // Check if the second clap happens within the allowed interval
+                            val timeSinceFirstClap = currentTime - firstClapTime
+                            if (timeSinceFirstClap <= maxIntervalBetweenClaps) {
+                                Log.d(TAG, "Second clap detected! Double clap confirmed.")
+                                onDetection()  // Trigger detection event for double clap
+                                firstClapTime = null  // Reset for next double clap detection
+                            } else {
+                                // If the time interval is too long, reset and treat as a new first clap
+                                Log.d(TAG, "Time interval too long. Resetting clap detection.")
+                                firstClapTime = currentTime
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in clap detection: ${e.message}")
+        } finally {
+            stopRecording()
+        }
+    }
+
+
+    private fun stopRecording() {
+        try {
+            if (isRecording) {
+                audioRecord.stop()
+                audioRecord.release()
+                Log.d(TAG, "Audio recording stopped")
+            }
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "Error stopping audio recording: ${e.message}")
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service Destroyed")
         stopAllFunctions()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(stopFunctionalityReceiver)
+        isRecording = false
+        stopRecording()
         serviceScope.cancel() // Cancel all coroutines
+        serviceFlashScope.cancel()
+        serviceVibScope.cancel()
+
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -155,7 +277,9 @@ class DetectionServiceForeground : Service(),
             }
         }
         val filter = IntentFilter(ACTION_STOP_FUNCTIONALITY)
-        LocalBroadcastManager.getInstance(this).registerReceiver(stopFunctionalityReceiver, filter)
+        LocalBroadcastManager
+            .getInstance(this)
+            .registerReceiver(stopFunctionalityReceiver, filter)
     }
 
     /**
@@ -183,19 +307,12 @@ class DetectionServiceForeground : Service(),
             PendingIntent.FLAG_UPDATE_CURRENT
         }
         val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            notificationIntent,
-            pendingIntentFlags
+            this, 0, notificationIntent, pendingIntentFlags
         )
 
-        return NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(channelName)
-            .setContentText(description)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .build()
+        return NotificationCompat.Builder(this, channelId).setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(channelName).setContentText(description)
+            .setContentIntent(pendingIntent).setOngoing(true).build()
     }
 
     /**
@@ -221,8 +338,7 @@ class DetectionServiceForeground : Service(),
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en")
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en")
             putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
             )
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
@@ -248,30 +364,6 @@ class DetectionServiceForeground : Service(),
         }
     }
 
-    /**
-     * Start Clap Detection by initializing RecorderThread and DetectorThread.
-     */
-    private fun startClapDetection() {
-        Log.d(TAG, "Starting clap detection")
-        isClapDetectionActive = true
-
-        // Initialize and start the RecorderThread
-        recorderThread = RecorderThread()
-            .apply {
-            start()
-            Log.d(TAG, "RecorderThread started")
-        }
-
-        // Initialize and start the DetectorThread with the recorder thread and a preference setting
-        detectorThread = DetectorThread(
-            recorderThread,
-            "YES"
-        ).apply {
-            setOnSignalsDetectedListener(this@DetectionServiceForeground)
-            start()
-            Log.d(TAG, "DetectorThread started")
-        }
-    }
 
     /**
      * Start Speech Detection by resetting the SpeechRecognizer and starting to listen.
@@ -279,8 +371,10 @@ class DetectionServiceForeground : Service(),
     private fun startSpeechDetection() {
         Log.d(TAG, "Starting speech detection")
         isSpeechDetectionActive = true
+        if (isDeviceFound) return
         resetSpeechRecognizer()
         startListening()
+        isDeviceFound = true
     }
 
     /**
@@ -290,17 +384,19 @@ class DetectionServiceForeground : Service(),
         Log.d(TAG, "Stopping clap detection")
         isClapDetectionActive = false
 
-        detectorThread?.let {
-            it.stopDetection()
-            Log.d(TAG, "DetectorThread stopped")
+        try {
+            if (this::audioRecord.isInitialized && isRecording) {
+                audioRecord.let {
+                    it.stop()
+                    it.release()
+                    Log.d(TAG, "Audio recording stopped")
+                }
+                isRecording = false
+            }
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "Error stopping audio recording: ${e.message}")
         }
-        detectorThread = null
 
-        recorderThread?.let {
-            it.stopRecording()
-            Log.d(TAG, "RecorderThread stopped")
-        }
-        recorderThread = null
     }
 
     /**
@@ -353,29 +449,42 @@ class DetectionServiceForeground : Service(),
     private fun onDetection() {
         Log.d(TAG, "Detection triggered")
         serviceScope.launch {
+            overrideMediaVolume()
+            stopAllDetection()
             playRingtone(getRingtoneUri())
             vibrate()
             flash()
         }
     }
 
+
+    private fun overrideMediaVolume(desiredVolume: Int = 15) {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val volume = when {
+            desiredVolume < 0 -> 0
+            desiredVolume > maxVolume -> maxVolume
+            else -> desiredVolume
+        }
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0)
+        Log.d(TAG, "Media volume overridden to $volume")
+    }
+
     /**
      * Play the ringtone for a specified duration.
      */
     private suspend fun playRingtone(ringtoneUri: Uri) {
+        if (mediaPlayer?.isPlaying == true) return
         withContext(Dispatchers.Main) {
-            stopRingtone() // Stop existing ringtone before playing a new one
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(applicationContext, ringtoneUri)
                 setAudioStreamType(AudioManager.STREAM_MUSIC)
+                isLooping = true
                 prepare()
                 start()
                 Log.d(TAG, "Ringtone started playing")
             }
 
-            // Delay to stop the ringtone after 3 seconds
-            delay(3000)
-            stopRingtone()
         }
     }
 
@@ -401,28 +510,39 @@ class DetectionServiceForeground : Service(),
     private fun vibrate() {
         if (!isAllowedVibration) return
 
-        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        vibrator?.let {
-            if (it.hasVibrator()) { // Check if the device has a vibrator
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    // For Android Oreo and above
-                    val vibrationEffect = VibrationEffect.createOneShot(
-                        1000, // Duration in milliseconds (1 second)
-                        VibrationEffect.DEFAULT_AMPLITUDE // Use the default vibration strength
-                    )
-                    it.vibrate(vibrationEffect)
-                    Log.d(TAG, "Vibrating for 1 second using VibrationEffect")
+        serviceVibScope.launch {
+            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            vibrator?.let {
+                if (it.hasVibrator()) { // Check if the device has a vibrator
+                    try {
+                        while (isActive) { // Keep vibrating as long as the coroutine is active
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                // For Android Oreo and above
+                                val vibrationEffect = VibrationEffect.createOneShot(
+                                    1000, // Duration in milliseconds (1 second)
+                                    VibrationEffect.DEFAULT_AMPLITUDE // Use the default vibration strength
+                                )
+                                it.vibrate(vibrationEffect)
+                                Log.d(TAG, "Vibrating for 1 second using VibrationEffect")
+                            } else {
+                                // For Android versions below Oreo
+                                @Suppress("DEPRECATION") it.vibrate(1000) // Duration in milliseconds (1 second)
+                                Log.d(TAG, "Vibrating for 1 second using deprecated method")
+                            }
+
+                            delay(1500L) // Delay between vibrations (1.5 seconds)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in vibration loop: ${e.message}")
+                    } finally {
+                        it.cancel() // Ensure vibrator is cancelled when exiting
+                    }
                 } else {
-                    // For Android versions below Oreo
-                    @Suppress("DEPRECATION")
-                    it.vibrate(1000) // Duration in milliseconds (1 second)
-                    Log.d(TAG, "Vibrating for 1 second using deprecated method")
+                    Log.e(TAG, "Device does not support vibration")
                 }
-            } else {
-                Log.e(TAG, "Device does not support vibration")
+            } ?: run {
+                Log.e(TAG, "Vibrator service not available")
             }
-        } ?: run {
-            Log.e(TAG, "Vibrator service not available")
         }
     }
 
@@ -431,28 +551,34 @@ class DetectionServiceForeground : Service(),
      */
     private fun flash() {
         if (!isAllowedFlashing) return
-        serviceScope.launch(Dispatchers.IO) {
+
+        serviceFlashScope.launch {
             val cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val cameraId = cameraManager.cameraIdList[0]
             try {
-                val cameraId = cameraManager.cameraIdList[0]
-                cameraManager.setTorchMode(cameraId, true)
-                Log.d(TAG, "Flash turned on")
 
-                // Flash for 3 times with delay
-                repeat(3) {
-                    delay(500L) // Adjust delay as needed
-                    cameraManager.setTorchMode(cameraId, false) // Turn off
-                    Log.d(TAG, "Flash turned off")
-                    delay(500L) // Pause between flashes
-                    cameraManager.setTorchMode(cameraId, true) // Turn on
+                // Start an indefinite flashing loop
+                while (isActive) {
+                    // Turn on the flashlight
+                    cameraManager.setTorchMode(cameraId, true)
                     Log.d(TAG, "Flash turned on")
-                }
 
-                // Ensure the torch is turned off after flashing
-                cameraManager.setTorchMode(cameraId, false)
-                Log.d(TAG, "Flash turned off after pattern")
+                    // Pause before turning off
+                    delay(500L)
+
+                    // Turn off the flashlight
+                    cameraManager.setTorchMode(cameraId, false)
+                    Log.d(TAG, "Flash turned off")
+
+                    // Pause before turning on again
+                    delay(500L)
+                }
             } catch (e: CameraAccessException) {
                 Log.e(TAG, "Error using camera flash: ${e.message}")
+            } finally {
+                // Ensure the torch is turned off when the coroutine exits
+                cameraManager.setTorchMode(cameraId, false)
+                Log.d(TAG, "Flash turned off after loop ended")
             }
         }
     }
@@ -556,46 +682,6 @@ class DetectionServiceForeground : Service(),
         } else {
             // Use default system ringtone
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        }
-    }
-
-
-    /**
-     * Handle whistle (clap) detection.
-     */
-    override fun onWhistleDetected() {
-        // Check if detection is allowed (not in cooldown)
-        if (!canDetect) {
-            Log.d(TAG, "Detection is in cooldown, ignoring this clap")
-            return // Exit if in cooldown period
-        }
-
-        Log.d(TAG, "onWhistleDetected")
-
-        val currentTime = System.currentTimeMillis()
-        val timeSinceLastClap = currentTime - lastClapTime
-        lastClapTime = currentTime
-
-        isDoubleClap = if (timeSinceLastClap <= DOUBLE_CLAP_THRESHOLD) {
-            // Double clap detected
-            Log.d(TAG, "onWhistleDetected Double")
-            true
-        } else {
-            // Single clap detected, reset the double clap flag
-            Log.d(TAG, "onWhistleDetected Single")
-            false
-        }
-
-        // If a double clap is detected, trigger the detection
-        if (isDoubleClap) {
-            onDetection()
-            // Set detection to cooldown mode
-            canDetect = false
-            // Start cooldown timer
-            handler.postDelayed({
-                canDetect = true // Allow detection after cooldown
-                Log.d(TAG, "Cooldown period ended, detection re-enabled")
-            }, DETECTION_COOLDOWN)
         }
     }
 }

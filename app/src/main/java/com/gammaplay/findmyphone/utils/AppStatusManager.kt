@@ -2,6 +2,7 @@ package com.gammaplay.findmyphone.utils
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.gammaplay.findmyphone.R
 
 class AppStatusManager(context: Context) {
 
@@ -34,7 +35,10 @@ class AppStatusManager(context: Context) {
      */
     fun setServiceActive(isActive: Boolean) {
         sharedPreferences.edit().putBoolean(KEY_IS_ACTIVE, isActive).apply()
-        if (isActive.not()) setPreference("startButton", "YES") else setPreference("startButton", "NO")
+        if (isActive.not()) setPreference("startButton", "YES") else setPreference(
+            "startButton",
+            "NO"
+        )
     }
 
     private fun setFlashActive(isActive: Boolean) {
@@ -107,20 +111,25 @@ class AppStatusManager(context: Context) {
     }
 
     fun setKeywordForVoiceRecognition(keyword: String?) {
-        sharedPreferences.edit().putString(KEY_IS_KEYWORD, keyword).apply()
+        sharedPreferences
+            .edit()
+            .putString(KEY_IS_KEYWORD, keyword)
+            .apply()
     }
 
     fun getKeywordForVoiceRecognition(): String {
-        val gettingKeyword = sharedPreferences.getString(KEY_IS_KEYWORD, "") ?: ""
-        return gettingKeyword
+        return sharedPreferences.getString(KEY_IS_KEYWORD, "") ?: ""
     }
 
     fun getRingtone(): Int {
-        val ringtone = sharedPreferences.getInt(KEY_IS_RINGTONE, -1)
-        return ringtone
+        return sharedPreferences
+            .getInt(KEY_IS_RINGTONE,   R.raw.cat)
     }
 
     fun setRingTone(ringtone: Int) {
-        sharedPreferences.edit().putInt(KEY_IS_RINGTONE, ringtone).apply()
+        sharedPreferences
+            .edit()
+            .putInt(KEY_IS_RINGTONE, ringtone)
+            .apply()
     }
 }

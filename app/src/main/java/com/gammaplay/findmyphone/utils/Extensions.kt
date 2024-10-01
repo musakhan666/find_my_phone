@@ -3,14 +3,19 @@ package com.gammaplay.findmyphone.utils
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.Paint
+import android.util.Log
+import android.view.KeyEvent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
 
 // Helper functions for drawing shadows
@@ -88,4 +93,34 @@ fun setStatusBarIconsColor(isDark: Boolean) {
         color = Color.Transparent,
         darkIcons = isDark
     )
+}
+
+@Composable
+fun VolumeButtonsHandler(
+    isActivated: Boolean
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+
+    DisposableEffect(context) {
+        val keyEventDispatcher = ViewCompat.OnUnhandledKeyEventListenerCompat { _, event ->
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_VOLUME_UP -> {
+                    isActivated
+                }
+
+                KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                    isActivated
+                }
+
+                else -> false
+            }
+        }
+
+        ViewCompat.addOnUnhandledKeyEventListener(view, keyEventDispatcher)
+
+        onDispose {
+            ViewCompat.removeOnUnhandledKeyEventListener(view, keyEventDispatcher)
+        }
+    }
 }

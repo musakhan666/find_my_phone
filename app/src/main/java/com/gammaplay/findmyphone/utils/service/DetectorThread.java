@@ -1,58 +1,44 @@
 package com.gammaplay.findmyphone.utils.service;
 
+import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.util.Log;
 
-import com.gammaplay.findmyphone.utils.service.OnSignalsDetectedListener;
-import com.gammaplay.findmyphone.utils.service.RecorderThread;
 import com.musicg.api.ClapApi;
-import com.musicg.api.WhistleApi;
 import com.musicg.wave.WaveHeader;
 
 import java.util.LinkedList;
 
 public class DetectorThread extends Thread {
     private volatile Thread _thread;
-    private int numWhistles;
     private int numClaps;
     private OnSignalsDetectedListener onSignalsDetectedListener;
     private RecorderThread recorder;
     private WaveHeader waveHeader;
-    private WhistleApi whistleApi;
     private ClapApi clapApi;
-    private int whistleCheckLength = 3;
     private int clapCheckLength = 1;
-    private int whistlePassScore = 3;
     private int clapPassScore = 1;
-    private LinkedList<Boolean> whistleResultList = new LinkedList<>();
     private LinkedList<Boolean> clapResultList = new LinkedList<>();
-    String clapValue;
+    private String clapValue;
 
     public DetectorThread(RecorderThread recorderThread, String value) {
         this.clapValue = value;
+        Log.d("DetectorThread", "Clap value set to: " + value);
 
         this.recorder = recorderThread;
         AudioRecord audioRecord = recorderThread.getAudioRecord();
-        int i = 0;
-        int i2 = audioRecord.getAudioFormat() == 2 ? 16 : audioRecord.getAudioFormat() == 3 ? 8 : 0;
-        i = audioRecord.getChannelConfiguration() == 16 ? 1 : i;
-        WaveHeader waveHeader2 = new WaveHeader();
-        this.waveHeader = waveHeader2;
-        waveHeader2.setChannels(i);
-        this.waveHeader.setBitsPerSample(i2);
+        int bitsPerSample = (audioRecord.getAudioFormat() == AudioFormat.ENCODING_PCM_16BIT) ? 16 : (audioRecord.getAudioFormat() == AudioFormat.ENCODING_PCM_8BIT) ? 8 : 0;
+        int channels = (audioRecord.getChannelConfiguration() == AudioFormat.CHANNEL_IN_MONO) ? 1 : 0; // Assuming mono channel
+        this.waveHeader = new WaveHeader();
+        this.waveHeader.setChannels(channels);
+        this.waveHeader.setBitsPerSample(bitsPerSample);
         this.waveHeader.setSampleRate(audioRecord.getSampleRate());
-        this.whistleApi = new WhistleApi(this.waveHeader);
         this.clapApi = new ClapApi(this.waveHeader);
     }
 
     private void initBuffer() {
-        this.numWhistles = 0;
         this.numClaps = 0;
-        this.whistleResultList.clear();
         this.clapResultList.clear();
-        for (int i = 0; i < this.whistleCheckLength; i++) {
-            this.whistleResultList.add(false);
-        }
         for (int i = 0; i < this.clapCheckLength; i++) {
             this.clapResultList.add(false);
         }
@@ -74,73 +60,63 @@ public class DetectorThread extends Thread {
             while (this._thread == currentThread) {
                 byte[] frameBytes = this.recorder.getFrameBytes();
                 if (frameBytes != null) {
-                    boolean isWhistle = this.whistleApi.isWhistle(frameBytes);
                     boolean isClap = this.clapApi.isClap(frameBytes);
-                    if (this.whistleResultList.getFirst().booleanValue()) {
-                        this.numWhistles--;
-                    }
-                    if (this.clapResultList.getFirst().booleanValue()) {
+                    // Update clap result list and numClaps
+                    if (this.clapResultList.getFirst()) {
                         this.numClaps--;
                     }
-                    this.whistleResultList.removeFirst();
                     this.clapResultList.removeFirst();
+                    this.clapResultList.add(isClap);
 
-                    this.whistleResultList.add(Boolean.valueOf(isWhistle));
-                    this.clapResultList.add(Boolean.valueOf(isClap));
-                    if (isWhistle) {
-                        this.numWhistles++;
-                    }
                     if (isClap) {
                         this.numClaps++;
+                        Log.d("DetectorThread", "Clap detected, numClaps: " + this.numClaps);
                     }
 
-                    if (this.numWhistles >= this.whistlePassScore) {
-                        Log.e("Sound", "Detected");
-                        initBuffer();
-                        if (clapValue.equals("ON")) {
-                            onWhistleDetected();
-                        }
-                    }
-
-                    if (this.numClaps >= this.clapPassScore) {
-                        Log.e("Sound", "Detected");
-                        initBuffer();
+                    // Check for single and double claps
+                    if (this.numClaps == 1) {
+                        // Single clap detected
+                        Log.e("DetectorThread", "Single Clap Detected");
+                        onSingleClapDetected(); // Notify listeners of single clap detection
+                    } else if (this.numClaps >= this.clapPassScore) {
+                        // Double clap detected
+                        Log.e("DetectorThread", "Double Clap Detected");
+                        initBuffer(); // Reset the buffer for the next detection
                         if (clapValue.equals("YES")) {
-                            onWhistleDetected();
+                            onClapDetected(); // Notify listeners of clap detection
                         }
                     }
                 } else {
-                    if (this.whistleResultList.getFirst().booleanValue()) {
-                        this.numWhistles--;
-                    }
-                    this.whistleResultList.removeFirst();
-                    this.whistleResultList.add(Boolean.FALSE);
-                    if (this.clapResultList.getFirst().booleanValue()) {
+                    // If no frame is detected, update the result list
+                    if (this.clapResultList.getFirst()) {
                         this.numClaps--;
                     }
                     this.clapResultList.removeFirst();
-                    this.clapResultList.add(Boolean.FALSE);
+                    this.clapResultList.add(false); // Adding false for no detection
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
+            Log.e("DetectorThread", "Error in detection: " + e.getMessage());
+        }
+    }
+
+    private void onSingleClapDetected() {
+        Log.d("DetectorThread", "onSingleClapDetected triggered.");
+        if (onSignalsDetectedListener != null) {
+            onSignalsDetectedListener.onClapDetected(); // Notify listeners of single clap
         }
     }
 
     private void onClapDetected() {
-        Log.d("TAG", "onClapDetected: ");
-    }
-
-    private void onWhistleDetected() {
-        Log.d("Sound", "onClapDetected: ");
-        OnSignalsDetectedListener onSignalsDetectedListener2 = this.onSignalsDetectedListener;
-        if (onSignalsDetectedListener2 != null) {
-            onSignalsDetectedListener2.onWhistleDetected();
+        Log.d("DetectorThread", "onClapDetected triggered.");
+        if (onSignalsDetectedListener != null) {
+            onSignalsDetectedListener.onClapDetected(); // Notify listeners of clap detection
         }
     }
 
-    public void setOnSignalsDetectedListener(OnSignalsDetectedListener onSignalsDetectedListener2) {
-        this.onSignalsDetectedListener = onSignalsDetectedListener2;
+    public void setOnSignalsDetectedListener(OnSignalsDetectedListener onSignalsDetectedListener) {
+        this.onSignalsDetectedListener = onSignalsDetectedListener;
     }
 
     public void interrupt() {

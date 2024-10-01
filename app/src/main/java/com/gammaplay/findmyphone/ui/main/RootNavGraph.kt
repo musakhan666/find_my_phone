@@ -20,7 +20,7 @@ fun RootNavigationGraph(navController: NavHostController) {
 
     val hasShownTutorial = settings.hasShownTutorial()
     val permission = PermissionsViewModel()
-        permission.checkAndRequestPermissions(context)
+
     // Set the start destination based on the tutorial flag
     val startDestination = if (hasShownTutorial) Graph.HOME else Graph.TUTORIAL
 
@@ -32,6 +32,7 @@ fun RootNavigationGraph(navController: NavHostController) {
         startDestination = startDestination
     ) {
         composable(Graph.HOME) {
+            permission.checkAndRequestPermissions(context)
             val homeViewModel = HomeViewModel(context.applicationContext)
             HomeScreen(navController, homeViewModel)
         }

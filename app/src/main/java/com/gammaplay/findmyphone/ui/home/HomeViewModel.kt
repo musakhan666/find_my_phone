@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.gammaplay.findmyphone.R
@@ -21,6 +22,17 @@ class HomeViewModel(application: Context) : ViewModel() {
     private val _activationActiveCardIndex = MutableLiveData(updateIndexBasedOnActivationType())
 
     val activationActiveCardIndex: LiveData<Int> get() = _activationActiveCardIndex
+
+    var textFieldValue = mutableStateOf("") // Set your initial value here
+
+    // Function to update the text value
+    fun updateTextFieldValue(newValue: String) {
+        textFieldValue.value = newValue
+    }
+
+    fun setTextFieldValue() {
+        textFieldValue.value = serviceStatusManager.getKeywordForVoiceRecognition()
+    }
 
     private fun updateIndexBasedOnActivationType(): Int {
         val activationType = serviceStatusManager.getActivationType()

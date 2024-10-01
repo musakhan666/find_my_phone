@@ -2,6 +2,7 @@ package com.gammaplay.findmyphone.ui.home
 
 import android.graphics.Paint
 import android.media.MediaPlayer
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,6 +72,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.gammaplay.findmyphone.ui.main.Graph
 import com.gammaplay.findmyphone.R
+import com.gammaplay.findmyphone.utils.VolumeButtonsHandler
 import com.gammaplay.findmyphone.utils.drawBigCircleShadow
 import com.gammaplay.findmyphone.utils.drawTopSectionShadow
 import com.gammaplay.findmyphone.utils.setStatusBarColor
@@ -83,6 +85,8 @@ fun HomeScreen(navController: NavHostController, homeViewModel: HomeViewModel) {
     val activeCardIndex = homeViewModel.activeCardIndex
     val activationActiveCardIndex by homeViewModel.activationActiveCardIndex.observeAsState(0)
     val isActivated by homeViewModel.isActivated.observeAsState(initial = false)
+
+
     val isFlashActivated by homeViewModel.isActivatedFlash.observeAsState(initial = true)
     val isVibrationActivated by homeViewModel.isActivatedVibration.observeAsState(initial = true)
 
@@ -96,6 +100,11 @@ fun HomeScreen(navController: NavHostController, homeViewModel: HomeViewModel) {
     val activationIcon = homeViewModel.activationIconRes
 
     val activationContentDescription = homeViewModel.activationContentDescriptions
+    Log.d("Key events", "$isActivated isActivated")
+
+    if (isActivated) VolumeButtonsHandler(isActivated = false)
+    else
+        VolumeButtonsHandler(isActivated = true)
 
     setStatusBarColor(color = Color.Transparent)
     setStatusBarIconsColor(true)
@@ -141,7 +150,7 @@ fun HomeScreen(navController: NavHostController, homeViewModel: HomeViewModel) {
 
             ) {
                 Text(
-                    text = if (isActivated) "Active" else "Inactive",
+                    text = if (isActivated) "Activate" else "Deactivate",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isActivated) Color.White else colorResource(id = R.color.title_text).copy(
@@ -249,6 +258,10 @@ fun MenuItem(
     var isActivationSheetOpen by rememberSaveable { mutableStateOf(false) }
     val cornerRadius = 14.dp
     var isSoundPlaying by remember { mutableStateOf(false) }
+    val textFieldValue by remember { homeViewModel.textFieldValue }
+    homeViewModel.setTextFieldValue()
+
+
 
     Box(modifier = Modifier
         .fillMaxWidth()
@@ -311,14 +324,12 @@ fun MenuItem(
     //================================SOUND SELECTION BOTTOM SHEET===============================
     if (isSoundSheetOpen) {
         ModalBottomSheet(
-            sheetState = soundSheetState,
-            onDismissRequest = {
+            sheetState = soundSheetState, onDismissRequest = {
                 isSoundPlaying = false
                 mediaPlayer.pause()
                 isSoundSheetOpen = false
 
-            },
-            containerColor = colorResource(id = R.color.background)
+            }, containerColor = colorResource(id = R.color.background)
         ) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
@@ -555,12 +566,11 @@ fun MenuItem(
                         }
                     }
                 }
-                var textFieldValue by remember { mutableStateOf("") }
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
 
                     OutlinedTextField(
                         value = textFieldValue,
-                        onValueChange = { textFieldValue = it },
+                        onValueChange = { homeViewModel.updateTextFieldValue(it) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(14.dp, 0.dp, 14.dp, 48.dp),
