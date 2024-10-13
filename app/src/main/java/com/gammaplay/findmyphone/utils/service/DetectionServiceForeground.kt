@@ -35,7 +35,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.gammaplay.findmyphone.R
-import com.gammaplay.findmyphone.ui.main.MainActivity
+import com.gammaplay.findmyphone.presentation.main.MainActivity
 import com.gammaplay.findmyphone.utils.AppStatusManager
 import com.musicg.api.ClapApi
 import com.musicg.wave.WaveHeader
@@ -100,7 +100,7 @@ class DetectionServiceForeground : Service() {
 
     // Activation Settings
     private var activationType: String = "clap"
-    private var keyword: String? = null
+    private var keywords: String? = null
     private var isAllowedFlashing: Boolean = false
     private var isAllowedVibration: Boolean = false
 
@@ -132,6 +132,14 @@ class DetectionServiceForeground : Service() {
         checkStatus()
 
 
+    }
+
+    private fun sendAlarmDetectedBroadcast() {
+        val intent = Intent("com.gammaplay.findmyphone.ALARM_DETECTION")
+        // You can also add extras if needed
+        intent.putExtra("extra_data", "alarm_detected")
+        sendBroadcast(intent)
+        Log.d(TAG, "Alarm detected broadcast sent")
     }
 
 
@@ -354,7 +362,7 @@ class DetectionServiceForeground : Service() {
      */
     private fun initializeRecognitionIntent() {
 
-        muteSpeechRecognizerMicBeepSound(true)
+//        muteSpeechRecognizerMicBeepSound(true)
 
         recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en")
@@ -372,13 +380,13 @@ class DetectionServiceForeground : Service() {
      */
     private fun checkStatus() {
         try {
-            keyword = appStatusManager.getKeywordForVoiceRecognition()
+            keywords = appStatusManager.getKeywordForVoiceRecognition()
             activationType = appStatusManager.getActivationType()
             isAllowedFlashing = appStatusManager.isFlashActive()
             isAllowedVibration = appStatusManager.isVibrationActive()
 
             Log.d(TAG, "Activation type: $activationType")
-            Log.d(TAG, "Keyword: $keyword")
+            Log.d(TAG, "Keyword: $keywords")
             Log.d(TAG, "Flash allowed: $isAllowedFlashing")
             Log.d(TAG, "Vibration allowed: $isAllowedVibration")
         } catch (ex: Exception) {
@@ -471,6 +479,7 @@ class DetectionServiceForeground : Service() {
     private fun onDetection() {
         Log.d(TAG, "Detection triggered")
         serviceScope.launch {
+            sendAlarmDetectedBroadcast()
             stopAllDetection()
             playRingtone(getRingtoneUri())
             vibrate()
@@ -639,14 +648,18 @@ class DetectionServiceForeground : Service() {
 
         override fun onResults(results: Bundle?) {
             Log.d(TAG, "SpeechRecognizer results received")
-
-            results?.let {
-                val matches = it.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            results?.let { resultBundle ->
+                val matches = resultBundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 matches?.let { resultList ->
-                    if (resultList.any { it.contains(keyword ?: "", ignoreCase = true) }) {
-                        Log.d(TAG, "Keyword '${keyword}' detected in speech")
-                        muteSpeechRecognizerMicBeepSound(false)
-                        onDetection()
+                    resultList.forEach { recognizedText ->
+                        Log.d(TAG, "Recognized speech: $recognizedText")
+
+                        if (keywords?.equals(recognizedText, ignoreCase = true) == true) {
+                            Log.d(TAG, "Keyword or phrase detected in speech")
+                            muteSpeechRecognizerMicBeepSound(false)
+                            onDetection()
+                            return@forEach
+                        }
                     }
                 }
             }
@@ -657,13 +670,9 @@ class DetectionServiceForeground : Service() {
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
-    fun muteSpeechRecognizerMicBeepSound(mute: Boolean) {
+    private fun muteSpeechRecognizerMicBeepSound(mute: Boolean) {
         val manager = getSystemService(AUDIO_SERVICE) as AudioManager
         manager.setStreamMute(AudioManager.STREAM_NOTIFICATION, mute)
-        manager.setStreamMute(AudioManager.STREAM_ALARM, mute)
-        manager.setStreamMute(AudioManager.STREAM_MUSIC, mute)
-        manager.setStreamMute(AudioManager.STREAM_RING, mute)
-        manager.setStreamMute(AudioManager.STREAM_SYSTEM, mute)
     }
 
     /**
