@@ -453,6 +453,7 @@ fun ActivationTypeSelectionBottomSheet(
     homeViewModel: HomeViewModel,
     onDismiss: () -> Unit
 ) {
+
     ModalBottomSheet(
         sheetState = activationSheetState,
         onDismissRequest = onDismiss,
