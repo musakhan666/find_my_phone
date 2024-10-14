@@ -7,7 +7,12 @@ import android.content.IntentFilter
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
-import android.util.Log
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -54,8 +59,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
@@ -67,7 +74,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -76,8 +85,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.gammaplay.findmyphone.presentation.main.Graph
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.gammaplay.findmyphone.R
+import com.gammaplay.findmyphone.presentation.main.Graph
+import com.gammaplay.findmyphone.presentation.dialog.PermissionDialog
+import com.gammaplay.findmyphone.presentation.permission.PermissionsViewModel
 import com.gammaplay.findmyphone.utils.VolumeButtonsHandler
 import com.gammaplay.findmyphone.utils.drawBigCircleShadow
 import com.gammaplay.findmyphone.utils.drawTopSectionShadow
@@ -88,20 +100,28 @@ import com.gammaplay.findmyphone.utils.shadowEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(openAndPopUp: (String) -> Unit, homeViewModel: HomeViewModel) {
+fun HomeScreen(
+    openAndPopUp: (String) -> Unit,
+    homeViewModel: HomeViewModel,
+    permissionsViewModel: PermissionsViewModel = hiltViewModel()
+) {
+
     val context = LocalContext.current
+
+    var showDialog by remember { mutableStateOf(false) }
+
 
     // Register the BroadcastReceiver
     val alarmDetectionReceiver = remember {
         object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                Log.d("HomeScreen", "Alarm detected!")
                 homeViewModel.setAlarmActivated(true)
-
-                // Handle the detection event (e.g., show a notification or update the UI)
             }
         }
     }
+
+
+
 
 
     DisposableEffect(Unit) {
@@ -118,7 +138,6 @@ fun HomeScreen(openAndPopUp: (String) -> Unit, homeViewModel: HomeViewModel) {
         } else {
             context.registerReceiver(alarmDetectionReceiver, filter)
         }
-
 
         onDispose {
             context.unregisterReceiver(alarmDetectionReceiver)
@@ -175,15 +194,32 @@ fun HomeScreen(openAndPopUp: (String) -> Unit, homeViewModel: HomeViewModel) {
                 .size(200.dp)
                 .drawBehind { drawBigCircleShadow(isActivated) }
                 .clip(shape = CircleShape)
-                .background(if (isActivated) colorResource(id = R.color.big_btn_active) else colorResource(id = R.color.bg_main_screen))
-                .clickable { homeViewModel.toggleActivation(context) }, contentAlignment = Alignment.Center
+                .background(
+                    if (isActivated) colorResource(id = R.color.big_btn_active) else colorResource(
+                        id = R.color.bg_main_screen
+                    )
+                )
+                .clickable {
+                    // Check permissions before toggling activation
+                    permissionsViewModel.checkPermissions(context) {
+                        when (it) {
+                            true -> showDialog = true
+                            else -> { homeViewModel.toggleActivation(context) }
+                        }
+                    }
+                },
+                contentAlignment = Alignment.Center
 
             ) {
                 Text(
-                    text = if (isActivated) "Activate" else "Deactivate",
+                    text = if (isActivated) stringResource(id = R.string.activate) else stringResource(
+                        id = R.string.de_activate
+                    ),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isActivated) Color.White else colorResource(id = R.color.title_text).copy(alpha = 0.3f)
+                    color = if (isActivated) Color.White else colorResource(id = R.color.title_text).copy(
+                        alpha = 0.3f
+                    )
                 )
             }
             Column(
@@ -263,6 +299,19 @@ fun HomeScreen(openAndPopUp: (String) -> Unit, homeViewModel: HomeViewModel) {
 
 
         }
+    }
+
+    if (isAlarmActivated) RippleEffectOverlayScreen { homeViewModel.deactivateAlarm(context) }
+
+    // If permissions are missing, show the permission dialog
+    if (showDialog) {
+        PermissionDialog(
+            onDismiss = { showDialog = false },
+            onGrantPermissions = {
+                showDialog = false
+                permissionsViewModel.requestPermissions(context)
+            }
+        )
     }
 }
 
@@ -368,7 +417,13 @@ fun SoundSelectionBottomSheet(
     onDismiss: () -> Unit
 ) {
     val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    var systemVolume by remember { mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) / audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()) }
+    var systemVolume by remember {
+        mutableStateOf(
+            audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) / audioManager.getStreamMaxVolume(
+                AudioManager.STREAM_MUSIC
+            ).toFloat()
+        )
+    }
 
     ModalBottomSheet(
         sheetState = soundSheetState,
@@ -710,4 +765,91 @@ fun FilterChipOption(isVibration: Boolean, selected: Boolean, homeViewModel: Hom
             enabled = true,
             selected = selected
         ))
+}
+
+@Composable
+fun RippleEffectOverlayScreen(
+    onStopClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFFFCE4EC),  // Light Pinkish
+                        Color(0xFFF8BBD0)   // Deeper pink at the bottom
+                    )
+                )
+            )
+            .pointerInput(Unit) { // Captures touch events to prevent interactions below the overlay
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent() // Consumes all touch events
+                    }
+                }
+            }, // This ensures no touches go through the overlay
+        contentAlignment = Alignment.Center
+    ) {
+        // Your ripple effect animation
+        val infiniteTransition = rememberInfiniteTransition()
+
+        // Ripple animation for circles
+        val rippleSize1 by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ), label = ""
+        )
+        val rippleSize2 by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2500, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ), label = ""
+        )
+        val rippleSize3 by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ), label = ""
+        )
+
+        // Ripple layers
+        RippleCircle(sizeFraction = rippleSize1, color = Color.Red.copy(alpha = 0.2f))
+        RippleCircle(sizeFraction = rippleSize2, color = Color.Red.copy(alpha = 0.15f))
+        RippleCircle(sizeFraction = rippleSize3, color = Color.Red.copy(alpha = 0.1f))
+
+        // Central stop button
+        Box(
+            modifier = Modifier
+                .size(150.dp)
+                .clip(CircleShape)
+                .background(Color.Red)
+                .clickable { onStopClick() }, // Handles click only on this button
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Stop",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun RippleCircle(sizeFraction: Float, color: Color) {
+    Box(
+        modifier = Modifier
+            .size(300.dp * sizeFraction)
+            .clip(CircleShape)
+            .background(color)
+    )
 }

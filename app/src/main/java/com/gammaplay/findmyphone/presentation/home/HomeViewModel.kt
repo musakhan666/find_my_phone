@@ -17,7 +17,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 @HiltViewModel
-class HomeViewModel @Inject constructor(@ApplicationContext private val application: Context
+class HomeViewModel @Inject constructor(
+    @ApplicationContext private val application: Context
 ) : ViewModel() {
     private val serviceStatusManager = AppStatusManager(application.applicationContext)
 
@@ -65,6 +66,12 @@ class HomeViewModel @Inject constructor(@ApplicationContext private val applicat
     fun setAlarmActivated(activated: Boolean) {
 
         _isAlarmActivated.value = activated
+    }
+
+    fun deactivateAlarm(context: Context) {
+        stopService(context = context)
+        startService(context)
+
     }
 
     // Function to toggle activation status

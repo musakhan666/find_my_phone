@@ -2,33 +2,41 @@ package com.gammaplay.findmyphone.presentation.permission
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.ViewModel
 
-private const val PERMISSION_CAMERA = "android.permission.CAMERA"
-private const val PERMISSION_RECORD_AUDIO = "android.permission.RECORD_AUDIO"
-private const val PERMISSION_READ_PHONE_STATE = "android.permission.READ_PHONE_STATE"
-private const val PERMISSION_FOREGROUND_SERVICE_MICROPHONE =
-    "android.permission.FOREGROUND_SERVICE_MICROPHONE"
-private const val PERMISSION_POST_NOTIFICATIONS =
-    "android.permission.POST_NOTIFICATIONS" // New for Android 13+
-
-
 private const val REQUEST_CODE_PERMISSIONS = 123 // Arbitrary request code
 
 class PermissionsViewModel : ViewModel() {
-    val requiredPermissions = mutableListOf(
-        PERMISSION_CAMERA,
-        PERMISSION_RECORD_AUDIO,
-        PERMISSION_READ_PHONE_STATE,
-        PERMISSION_FOREGROUND_SERVICE_MICROPHONE,
-        PERMISSION_POST_NOTIFICATIONS
 
+
+    val requiredPermissions = mutableListOf(
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.POST_NOTIFICATIONS" // New for Android 13+
     )
 
-    fun checkAndRequestPermissions(context: Context) {
+    fun checkPermissions(context: Context, callback: (Boolean) -> Unit) {
+        val missingPermissions = requiredPermissions.filter {
+            val permissionGranted = ContextCompat.checkSelfPermission(context, it) == PermissionChecker.PERMISSION_GRANTED
+            Log.d("PermissionsCheck", "Permission: $it, Granted: $permissionGranted")
+            !permissionGranted
+        }
+
+        if (missingPermissions.isNotEmpty()) {
+            // Show the dialog
+            callback.invoke(true) // Permissions are missing
+        } else {
+            // All permissions are granted
+            callback.invoke(false)
+        }
+    }
+
+    fun requestPermissions(context: Context) {
         val missingPermissions = requiredPermissions.filter {
             ContextCompat.checkSelfPermission(context, it) != PermissionChecker.PERMISSION_GRANTED
         }
@@ -42,4 +50,7 @@ class PermissionsViewModel : ViewModel() {
             )
         }
     }
+
+
 }
+

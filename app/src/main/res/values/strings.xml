@@ -16,6 +16,9 @@
     <string name="text_additional_options">With these options enabled, the phone will vibrate and blink with a flashlight</string>
 
     <string name="language">Language</string>
+    <string name="activate">Activate</string>
+    <string name="de_activate">Deactivate</string>
+
     <string name="rate_us">Rate Us</string>
     <string name="share_app">Share App</string>
     <string name="choose_language">Choose Language</string>
@@ -32,4 +35,12 @@
     <string name="russian">Russian</string>
     <string name="swedish">Swedish</string>
     <string name="czech">Czech</string>
+
+    // dialog
+    <string name="permission_dialog_title">Needs a few permissions to get started</string>
+    <string name="permission_camera_flash">Camera for flash light</string>
+    <string name="permission_mic_claps">Mic for claps detection</string>
+    <string name="grant_permissions_button">Grant Permissions</string>
+    <string name="not_now_button">Not now</string>
+
 </resources>
