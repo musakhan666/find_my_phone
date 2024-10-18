@@ -15,6 +15,39 @@
     <string name="text_activation_type">You can set phone reaction to claps, voice, or both</string>
     <string name="text_additional_options">With these options enabled, the phone will vibrate and blink with a flashlight</string>
 
+    <string name="clap">clap</string>
+    <string name="speech">speech</string>
+    <string name="both">both</string>
+
+
+    // dialog
+    <string name="permission_dialog_title">App needs the following permissions to work properly. Please approve this permissions:</string>
+    <string name="permission_camera_flash">Camera for flash light</string>
+    <string name="permission_mic_claps">Mic for claps detection</string>
+    <string name="submit">Submit</string>
+    <string name="grant_permissions_button">Grant Permissions</string>
+    <string name="not_now_button">Not now</string>
+    <string name="permission2_dialog_title">Permission required</string>
+    <string name="microphone_permission_title">Microphone permission required</string>
+    <string name="camera_permission_title">Camera permission required</string>
+    <string name="rate_us_title">How do you like this app?</string>
+    <string name="microphone_permission_message">This app cannot run because it does not have mic permission required for clap detection.</string>
+    <string name="camera_permission_message">This app cannot run because it does not have camera permission required for flashlight blinking.</string>
+    <string name="ok_button">Ok</string>
+    <string name="submit_button">Submit</string>
+    <string name="notification_permission_title">Notification permission required</string>
+    <string name="notification_permission_message">This app cannot run because it does not have notification permission. Please enable the permission.</string>
+    <string name="overlay_permission_title">Overlay permission required</string>
+    <string name="overlay_permission_message">This app cannot run because it does not have overlay permission. Please enable the permission.</string>
+
+    //settings
+    <string name="general">General</string>
+    <string name="vibration">Vibration</string>
+    <string name="flashlight">Flashlight</string>
+    <string name="Duration">Duration</string>
+    <string name="sensitivity">Sensitivity</string>
+    <string name="others">Other Settings</string>
+
     <string name="language">Language</string>
     <string name="activate">Activate</string>
     <string name="de_activate">Deactivate</string>
@@ -22,7 +55,6 @@
     <string name="rate_us">Rate Us</string>
     <string name="share_app">Share App</string>
     <string name="choose_language">Choose Language</string>
-    <string name="ok">Ok!</string>
     <string name="let_us_know">Let us know how we\'re doing?</string>
     <string name="rate_us_confirm">Rate us</string>
     <string name="cancel">Cancel</string>
@@ -36,11 +68,44 @@
     <string name="swedish">Swedish</string>
     <string name="czech">Czech</string>
 
-    // dialog
-    <string name="permission_dialog_title">Needs a few permissions to get started</string>
-    <string name="permission_camera_flash">Camera for flash light</string>
-    <string name="permission_mic_claps">Mic for claps detection</string>
-    <string name="grant_permissions_button">Grant Permissions</string>
-    <string name="not_now_button">Not now</string>
+    <string name="choose_flashlight_mode">Choose flashlight mode</string>
+    <string name="choose_vibration_mode">Choose vibration mode</string>
+    <string name="choose_sensitivity">Choose Sensitivity</string>
+    <string name="choose_duration">Choose Duration</string>
+
+
+    <string name="play_test">Play Test</string>
+    <string name="ok">Ok</string>
+    <string name="no_flashlight_found">No camera with flashlight found</string>
+
+
+    <!-- Flashlight Modes -->
+    <string name="flashlight_mode_short_blink">Short blink</string>
+    <string name="flashlight_mode_long_blink">Long blink</string>
+    <string name="flashlight_mode_pulse">Pulse</string>
+    <string name="flashlight_mode_sos">SOS</string>
+    <string name="flashlight_mode_continuous_on">Continuous On</string>
+    <string name="flashlight_mode_strobe">Strobe</string>
+    <string name="flashlight_mode_firefly">Firefly</string>
+
+    <!-- Vibration Modes -->
+    <string name="vibration_mode_wave">Wave</string>
+    <string name="vibration_mode_heartbeat">Heartbeat</string>
+    <string name="vibration_mode_short_pulse">Short Pulse</string>
+    <string name="vibration_mode_long_pulse">Long Pulse</string>
+    <string name="vibration_mode_ramp">Ramp</string>
+
+    <!-- Duration Modes -->
+    <string name="duration_5s">5s</string>
+    <string name="duration_10s">10s</string>
+    <string name="duration_30s">30s</string>
+    <string name="duration_1min">1min</string>
+    <string name="duration_loop">loop</string>
+    <!-- Sensitivity Levels -->
+    <string name="sensitivity_low">Low</string>
+    <string name="sensitivity_medium">Medium</string>
+    <string name="sensitivity_high">High</string>
+    <string name="sensitivity_maximum">Maximum</string>
+
 
 </resources>

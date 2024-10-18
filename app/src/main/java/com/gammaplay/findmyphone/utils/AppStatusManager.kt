@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.gammaplay.findmyphone.R
 
-class AppStatusManager(context: Context) {
+class AppStatusManager(val context: Context) {
 
     companion object {
         private const val PREF_NAME = "service_status_pref"
@@ -14,90 +14,56 @@ class AppStatusManager(context: Context) {
         private const val KEY_IS_KEYWORD = "is_keyword"
         private const val KEY_IS_RINGTONE = "ring_tone"
 
-    }
-
-    fun hasShownTutorial(): Boolean {
-        return sharedPreferences.getBoolean("has_shown_tutorial", false)
-    }
-
-    // Function to mark the tutorial as shown
-    fun setTutorialShown() {
-        sharedPreferences.edit().putBoolean("has_shown_tutorial", true).apply()
-        setPreference("flash", "YES")
-        setPreference("vibration", "YES")
+        // Keys for modes and settings
+        private const val KEY_VIBRATION_MODE = "vibration_mode"
+        private const val KEY_DURATION_MODE = "duration_mode"
+        private const val KEY_SENSITIVITY_LEVEL = "sensitivity_level"
+        private const val KEY_FLASHLIGHT_MODE = "flashlight_mode"
     }
 
     private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
     /**
-     * Set the service activation status.
+     * Tutorial handling
      */
-    fun setServiceActive(isActive: Boolean) {
-        sharedPreferences.edit().putBoolean(KEY_IS_ACTIVE, isActive).apply()
-        if (isActive.not()) setPreference("startButton", "YES") else setPreference(
-            "startButton",
-            "NO"
-        )
+    fun hasShownTutorial(): Boolean {
+        return sharedPreferences.getBoolean("has_shown_tutorial", false)
     }
 
-    private fun setFlashActive(isActive: Boolean) {
-        sharedPreferences.edit().putBoolean(KEY_IS_FLASH, isActive).apply()
-        if (isActive) setPreference("flash", "YES") else setPreference("flash", "NO")
-
-    }
-
-    private fun setVibrationActive(isActive: Boolean) {
-        sharedPreferences.edit().putBoolean(KEY_IS_VIBRATION, isActive).apply()
-        if (isActive) setPreference("vibration", "YES") else setPreference("vibration", "NO")
-
-    }
-
-
-    private fun setPreference(string: String, value: String) {
-        sharedPreferences.edit().putString(string, value).apply()
-
+    fun setTutorialShown() {
+        sharedPreferences.edit().putBoolean("has_shown_tutorial", true).apply()
+        setPreference("flash", "YES")
+        setPreference("vibration", "YES")
     }
 
     /**
-     * Get the current service activation status.
-     * Default value is `false` (inactive).
+     * Service status management
      */
+    fun setServiceActive(isActive: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_IS_ACTIVE, isActive).apply()
+        setPreference("startButton", if (isActive) "NO" else "YES")
+    }
 
     fun isServiceActive(): Boolean {
         return sharedPreferences.getBoolean(KEY_IS_ACTIVE, true)
     }
 
-    fun isFlashActive(): Boolean {
-        return sharedPreferences.getBoolean(KEY_IS_FLASH, true)
-    }
-
-    fun isVibrationActive(): Boolean {
-        return sharedPreferences.getBoolean(KEY_IS_VIBRATION, true)
-    }
-
-    // Function to get the current activation type
-    fun getActivationType(): String {
-        return sharedPreferences.getString("activation_type", "clap") ?: "clap"
-    }
-
-    // Function to set the activation type based on the index
-    fun setActivationType(index: Int) {
-        val type = when (index) {
-            0 -> "clap"
-            1 -> "speech"
-            2 -> "both"
-            else -> "clap"
-        }
-        sharedPreferences.edit().putString("activation_type", type).apply()
-    }
-
-    /**
-     * Toggle the service activation status.
-     */
     fun toggleServiceStatus() {
         val currentStatus = isServiceActive()
         setServiceActive(!currentStatus)
+    }
+
+    /**
+     * Flashlight management
+     */
+    fun setFlashActive(isActive: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_IS_FLASH, isActive).apply()
+        setPreference("flash", if (isActive) "YES" else "NO")
+    }
+
+    fun isFlashActive(): Boolean {
+        return sharedPreferences.getBoolean(KEY_IS_FLASH, true)
     }
 
     fun toggleFlashStatus() {
@@ -105,31 +71,96 @@ class AppStatusManager(context: Context) {
         setFlashActive(!currentStatus)
     }
 
+    fun setFlashlightMode(mode: Int) {
+        sharedPreferences.edit().putInt(KEY_FLASHLIGHT_MODE, mode).apply()
+    }
+
+    fun getFlashlightMode(): Int {
+        return sharedPreferences.getInt(KEY_FLASHLIGHT_MODE, R.string.flashlight_mode_short_blink) ?: 0
+    }
+
+    /**
+     * Vibration management
+     */
+    fun setVibrationActive(isActive: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_IS_VIBRATION, isActive).apply()
+        setPreference("vibration", if (isActive) "YES" else "NO")
+    }
+
+    fun isVibrationActive(): Boolean {
+        return sharedPreferences.getBoolean(KEY_IS_VIBRATION, true)
+    }
+
     fun toggleVibrationStatus() {
         val currentStatus = isVibrationActive()
         setVibrationActive(!currentStatus)
     }
 
+    fun setVibrationMode(mode: Int) {
+        sharedPreferences.edit().putInt(KEY_VIBRATION_MODE, mode).apply()
+    }
+
+    fun getVibrationMode(): Int {
+        return sharedPreferences.getInt(KEY_VIBRATION_MODE, R.string.vibration_mode_wave) ?: 0
+    }
+
+    /**
+     * Duration management
+     */
+    fun setDurationMode(duration: Int) {
+        sharedPreferences.edit().putInt(KEY_DURATION_MODE, duration).apply()
+    }
+
+    fun getDurationMode(): Int {
+        return sharedPreferences.getInt(KEY_DURATION_MODE, R.string.duration_loop) ?: 0
+    }
+
+    /**
+     * Sensitivity management
+     */
+    fun setSensitivityLevel(level: Int) {
+        sharedPreferences.edit().putInt(KEY_SENSITIVITY_LEVEL, level).apply()
+    }
+
+    fun getSensitivityLevel(): Int {
+        return sharedPreferences.getInt(KEY_SENSITIVITY_LEVEL, R.string.sensitivity_medium) ?: 0
+    }
+
+    /**
+     * Activation type management
+     */
+    fun getActivationType(): String {
+        return sharedPreferences.getString("activation_type", context.getString(R.string.clap))
+            ?: context.getString(R.string.clap)
+    }
+
+    fun setActivationType(index: Int) {
+        val type = when (index) {
+            0 -> context.getString(R.string.clap)
+            1 -> context.getString(R.string.speech)
+            2 -> context.getString(R.string.both)
+            else -> context.getString(R.string.clap)
+        }
+        sharedPreferences.edit().putString("activation_type", type).apply()
+    }
+
+    /**
+     * Keyword management for voice recognition
+     */
     fun setKeywordForVoiceRecognition(keyword: String?) {
-        sharedPreferences
-            .edit()
-            .putString(KEY_IS_KEYWORD, keyword)
-            .apply()
+        sharedPreferences.edit().putString(KEY_IS_KEYWORD, keyword).apply()
     }
 
     fun getKeywordForVoiceRecognition(): String {
         return sharedPreferences.getString(KEY_IS_KEYWORD, "") ?: ""
     }
 
-    fun getRingtone(): Int {
-        return sharedPreferences
-            .getInt(KEY_IS_RINGTONE,   R.raw.cat)
-    }
+    /**
+     * Ringtone management
+     */
+    fun getRingtone(): Int { return sharedPreferences.getInt(KEY_IS_RINGTONE, R.raw.cat) }
 
-    fun setRingTone(ringtone: Int) {
-        sharedPreferences
-            .edit()
-            .putInt(KEY_IS_RINGTONE, ringtone)
-            .apply()
-    }
+    private fun setPreference(key: String, value: String) { sharedPreferences.edit().putString(key, value).apply() }
+
+    fun setRingTone(ringtone: Int) { sharedPreferences.edit().putInt(KEY_IS_RINGTONE, ringtone).apply() }
 }

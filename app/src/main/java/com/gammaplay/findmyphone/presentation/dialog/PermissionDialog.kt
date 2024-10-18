@@ -62,6 +62,8 @@ fun PermissionDialog(
             // Permission items
             PermissionItem(icon = R.drawable.bolt, text = stringResource(id = R.string.permission_camera_flash))
             PermissionItem(icon = R.drawable.mic, text = stringResource(id = R.string.permission_mic_claps))
+            PermissionItem(icon = R.drawable.ic_notification, text ="Notification for <reason>")
+            PermissionItem(icon = R.drawable.ic_overlay, text = "Overlay for <reason>")
 
             Spacer(modifier = Modifier.height(24.dp))
             Button(
@@ -70,12 +72,6 @@ fun PermissionDialog(
             )
             {
                 Text(text = stringResource(id = R.string.grant_permissions_button))
-            }
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
-                Text(text = stringResource(id = R.string.not_now_button))
             }
 
         }
@@ -102,5 +98,5 @@ fun PermissionItem(icon: Int, text: String) {
 @Preview(showBackground = true)
 @Composable
 fun PermissionDialogPreview() {
-    PermissionDialog(onDismiss = {}, onGrantPermissions = {})
+    NotificationPermissionDialog(onDismiss = {}, onGrantPermissions = {})
 }

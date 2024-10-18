@@ -7,12 +7,8 @@ import android.content.IntentFilter
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import android.provider.Settings
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,10 +55,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
@@ -74,9 +68,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -84,12 +76,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gammaplay.findmyphone.R
 import com.gammaplay.findmyphone.presentation.main.Graph
-import com.gammaplay.findmyphone.presentation.dialog.PermissionDialog
+import com.gammaplay.findmyphone.presentation.dialog.showPermissionsDialog
 import com.gammaplay.findmyphone.presentation.permission.PermissionsViewModel
+import com.gammaplay.findmyphone.ui.theme.CustomFontFamily
 import com.gammaplay.findmyphone.utils.VolumeButtonsHandler
 import com.gammaplay.findmyphone.utils.drawBigCircleShadow
 import com.gammaplay.findmyphone.utils.drawTopSectionShadow
@@ -109,6 +101,7 @@ fun HomeScreen(
     val context = LocalContext.current
 
     var showDialog by remember { mutableStateOf(false) }
+    var missingPermissions by remember { mutableStateOf(emptyList<String>()) }
 
 
     // Register the BroadcastReceiver
@@ -124,18 +117,19 @@ fun HomeScreen(
 
 
 
-    DisposableEffect(Unit) {
-        val filter = IntentFilter("com.gammaplay.findmyphone.ALARM_DETECTION")
-        val receiverFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        } else {
-            0 // Default flag for older versions
-        }
 
+    DisposableEffect(Unit) {
         // Registering the receiver
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.registerReceiver(alarmDetectionReceiver, filter, receiverFlags)
+        val filter = IntentFilter("com.gammaplay.findmyphone.ALARM_DETECTION")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(
+                alarmDetectionReceiver,
+                filter,
+                ComponentActivity.RECEIVER_EXPORTED
+            )
         } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
             context.registerReceiver(alarmDetectionReceiver, filter)
         }
 
@@ -201,10 +195,14 @@ fun HomeScreen(
                 )
                 .clickable {
                     // Check permissions before toggling activation
-                    permissionsViewModel.checkPermissions(context) {
-                        when (it) {
-                            true -> showDialog = true
-                            else -> { homeViewModel.toggleActivation(context) }
+                    permissionsViewModel.checkPermissions(context) { missingPerms ->
+                        if (missingPerms.isNotEmpty() or !Settings.canDrawOverlays(context)) {
+                            // Missing permissions exist, show the permission dialog
+                            missingPermissions = missingPerms
+                            showDialog = true
+                        } else {
+                            // No missing permissions, proceed with activation
+                            homeViewModel.toggleActivation(context)
                         }
                     }
                 },
@@ -301,18 +299,24 @@ fun HomeScreen(
         }
     }
 
-    if (isAlarmActivated) RippleEffectOverlayScreen { homeViewModel.deactivateAlarm(context) }
 
     // If permissions are missing, show the permission dialog
+    // Trigger showing of dialog if permissions are missing
     if (showDialog) {
-        PermissionDialog(
-            onDismiss = { showDialog = false },
+        showPermissionsDialog(
+            missingPermissions = missingPermissions,
+            viewModel = permissionsViewModel,  // Pass the permissions view model
+            context = context,
+            onDismiss = {
+                showDialog = false  // Close the dialog when dismissed
+            },
             onGrantPermissions = {
-                showDialog = false
-                permissionsViewModel.requestPermissions(context)
+                // Request the missing permissions
+                showDialog = false  // Close the dialog after requesting permissions
             }
         )
     }
+
 }
 
 
@@ -355,7 +359,7 @@ fun MenuItem(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp),
+                .padding(10.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -364,12 +368,13 @@ fun MenuItem(
             Image(
                 painter = painterResource(id = iconResId),
                 contentDescription = title,
-                modifier = Modifier.size(100.dp)
+                modifier = Modifier.size(70.dp)
             )
             Text(
                 text = title,
                 color = colorResource(id = R.color.title_text),
-                fontWeight = FontWeight.SemiBold
+                fontFamily = CustomFontFamily,
+                fontSize = 12.sp
             )
         }
     }
@@ -751,7 +756,13 @@ fun FilterChipOption(isVibration: Boolean, selected: Boolean, homeViewModel: Hom
                 )
             }
         } else {
-            null
+            {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_close),
+                    contentDescription = "Done icon",
+                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                )
+            }
         },
         colors = FilterChipDefaults.filterChipColors(
             labelColor = colorResource(id = R.color.title_text),
@@ -767,89 +778,3 @@ fun FilterChipOption(isVibration: Boolean, selected: Boolean, homeViewModel: Hom
         ))
 }
 
-@Composable
-fun RippleEffectOverlayScreen(
-    onStopClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFCE4EC),  // Light Pinkish
-                        Color(0xFFF8BBD0)   // Deeper pink at the bottom
-                    )
-                )
-            )
-            .pointerInput(Unit) { // Captures touch events to prevent interactions below the overlay
-                awaitPointerEventScope {
-                    while (true) {
-                        awaitPointerEvent() // Consumes all touch events
-                    }
-                }
-            }, // This ensures no touches go through the overlay
-        contentAlignment = Alignment.Center
-    ) {
-        // Your ripple effect animation
-        val infiniteTransition = rememberInfiniteTransition()
-
-        // Ripple animation for circles
-        val rippleSize1 by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ), label = ""
-        )
-        val rippleSize2 by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2500, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ), label = ""
-        )
-        val rippleSize3 by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(3000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ), label = ""
-        )
-
-        // Ripple layers
-        RippleCircle(sizeFraction = rippleSize1, color = Color.Red.copy(alpha = 0.2f))
-        RippleCircle(sizeFraction = rippleSize2, color = Color.Red.copy(alpha = 0.15f))
-        RippleCircle(sizeFraction = rippleSize3, color = Color.Red.copy(alpha = 0.1f))
-
-        // Central stop button
-        Box(
-            modifier = Modifier
-                .size(150.dp)
-                .clip(CircleShape)
-                .background(Color.Red)
-                .clickable { onStopClick() }, // Handles click only on this button
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Stop",
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
-fun RippleCircle(sizeFraction: Float, color: Color) {
-    Box(
-        modifier = Modifier
-            .size(300.dp * sizeFraction)
-            .clip(CircleShape)
-            .background(color)
-    )
-}

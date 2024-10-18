@@ -5,12 +5,10 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.PixelFormat
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraManager
 import android.media.AudioFormat
@@ -23,7 +21,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -31,13 +28,21 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import android.view.WindowManager
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.gammaplay.findmyphone.R
 import com.gammaplay.findmyphone.presentation.main.MainActivity
+import com.gammaplay.findmyphone.presentation.overlay.RippleEffectOverlayScreen
 import com.gammaplay.findmyphone.utils.AppStatusManager
-import com.musicg.api.ClapApi
+import com.gammaplay.findmyphone.utils.ClapApi
 import com.musicg.wave.WaveHeader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,17 +52,15 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 
 /**
  * Foreground Service that detects claps and speech based on the activation type.
  * Handles "clap", "speech", and "both" activation modes.
  */
-class DetectionServiceForeground : Service() {
+class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
 
     companion object {
-        const val ACTION_STOP_FUNCTIONALITY = "com.gammaplay.findmyphone.ACTION_STOP_FUNCTIONALITY"
         const val TAG = "DetectionService"
         const val NOTIFICATION_CHANNEL_ID = "speech_recognition_channel"
         private const val NOTIFICATION_ID = 1
@@ -92,8 +95,6 @@ class DetectionServiceForeground : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
 
-    // Broadcast Receiver to stop functionalities
-    private lateinit var stopFunctionalityReceiver: BroadcastReceiver
 
     // App Status Manager for retrieving preferences (Assuming you have this class implemented)
     private lateinit var appStatusManager: AppStatusManager
@@ -101,16 +102,27 @@ class DetectionServiceForeground : Service() {
     // Activation Settings
     private var activationType: String = "clap"
     private var keywords: String? = null
+    private var vibrationMode: Int? = null
+    private var flashlightMode: Int? = null
+    private var sensitivityLevel: Int? = null
+    private var duration: Int? = null
+
     private var isAllowedFlashing: Boolean = false
     private var isAllowedVibration: Boolean = false
 
     // Handler for scheduling mode switches
     private val handler = Handler(Looper.getMainLooper())
 
+    private val savedStateRegistryController = SavedStateRegistryController.create(this)
+
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service Created")
+
+        // init your SavedStateRegistryController
+        savedStateRegistryController.performAttach() // you can ignore this line, becase performRestore method will auto call performAttach() first.
+        savedStateRegistryController.performRestore(null)
 
 
         appStatusManager = AppStatusManager(context = this)
@@ -118,9 +130,6 @@ class DetectionServiceForeground : Service() {
         // Initialize Notification and start foreground
         val notification = initNotification()
         startForeground(NOTIFICATION_ID, notification)
-
-        // Initialize BroadcastReceiver
-        initBroadcastReceiver()
 
         // Initialize Speech Recognizer
         initializeSpeechRecognizer()
@@ -139,11 +148,47 @@ class DetectionServiceForeground : Service() {
         // You can also add extras if needed
         intent.putExtra("extra_data", "alarm_detected")
         sendBroadcast(intent)
-        Log.d(TAG, "Alarm detected broadcast sent")
     }
 
+    private  fun reinitialize() {
+        // Initialize Speech Recognizer
+        initializeSpeechRecognizer()
+
+        // Initialize Recognition Intent
+        initializeRecognitionIntent()
+        when (activationType) {
+            "none" -> {
+                stopAllDetection()
+            }
+
+            "clap" -> {
+                if (!isClapDetectionActive) {
+                    startClapDetection()
+                }
+            }
+
+            "speech" -> {
+                if (!isSpeechDetectionActive) {
+                    startSpeechDetection()
+                }
+            }
+
+            "both" -> {
+                if (!isClapDetectionActive && !isSpeechDetectionActive) {
+                    startClapDetection()
+                    scheduleSwitchToSpeech()
+                }
+            }
+
+            else -> {
+                Log.e(TAG, "Unknown activation type: $activationType")
+            }
+        }
+
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
         Log.d(TAG, "Service Started")
 
         when (activationType) {
@@ -178,13 +223,54 @@ class DetectionServiceForeground : Service() {
     }
 
     private fun startClapDetection() {
-        initAudioRecorder()
-        isRecording = true
-        Thread { detectClaps() }.start()
-        isClapDetectionActive = true
-        Log.d(TAG, "Clap detection started")
+        val handler = Handler(Looper.getMainLooper()) // Create a handler for the main thread
+        handler.postDelayed({
+            initAudioRecorder() // Initialize audio recorder
+            isRecording = true
+            Thread { detectClaps() }.start() // Start the clap detection in a separate thread
+            isClapDetectionActive = true
+            Log.d(TAG, "Clap detection started after 4 seconds delay")
+        }, 4000) // Delay execution by 2000 milliseconds (2 seconds)
     }
 
+    private var contentView: ComposeView? = null
+
+    private fun showOverlay(context: Context) {
+        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+        contentView = ComposeView(this).apply {
+            setViewTreeSavedStateRegistryOwner(this@DetectionServiceForeground)
+            setViewTreeLifecycleOwner(this@DetectionServiceForeground)
+            setContent {
+                RippleEffectOverlayScreen {
+                    removeOverlay()
+                    restartService(context)
+
+                }
+            }
+        }
+
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        )
+
+        windowManager.addView(contentView, params)
+    }
+
+    // Function to remove the overlay
+    private fun removeOverlay() {
+        contentView?.let {
+            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            windowManager.removeView(it)
+            contentView = null
+        }
+    }
 
     private fun initAudioRecorder() {
         val sampleRate = 44100
@@ -224,27 +310,42 @@ class DetectionServiceForeground : Service() {
         var firstClapTime: Long? = null  // To store the time of the first clap
         val maxIntervalBetweenClaps = 500  // Max interval between claps (in ms)
 
+        // Adjust the sensitivity of the ClapApi
+        sensitivityLevel?.let { clapApi.setSensitivity(it) }
+
         try {
             while (isRecording) {
                 val readBytes = audioRecord.read(buffer, 0, buffer.size)
                 if (readBytes > 0) {
+                    // Clap detection based on the adjusted sensitivity
                     if (clapApi.isClap(buffer)) {
                         val currentTime = System.currentTimeMillis()
 
                         // If this is the first clap, save the time
                         if (firstClapTime == null) {
                             firstClapTime = currentTime
-                            Log.d(TAG, "First clap detected!")
+                            Log.d(
+                                "Clap Detection",
+                                "First clap detected at sensitivity: $sensitivityLevel!"
+                            )
                         } else {
                             // Check if the second clap happens within the allowed interval
                             val timeSinceFirstClap = currentTime - firstClapTime
                             if (timeSinceFirstClap <= maxIntervalBetweenClaps) {
-                                Log.d(TAG, "Second clap detected! Double clap confirmed.")
+                                Log.d(
+                                    "Clap Detection",
+                                    "Second clap detected! Double clap confirmed at sensitivity: ${
+                                        getString(sensitivityLevel ?: 0)
+                                    }."
+                                )
                                 onDetection()  // Trigger detection event for double clap
                                 firstClapTime = null  // Reset for next double clap detection
                             } else {
                                 // If the time interval is too long, reset and treat as a new first clap
-                                Log.d(TAG, "Time interval too long. Resetting clap detection.")
+                                Log.d(
+                                    "Clap Detection",
+                                    "Time interval too long. Resetting clap detection."
+                                )
                                 firstClapTime = currentTime
                             }
                         }
@@ -257,7 +358,6 @@ class DetectionServiceForeground : Service() {
             stopRecording()
         }
     }
-
 
     private fun stopRecording() {
         try {
@@ -281,7 +381,6 @@ class DetectionServiceForeground : Service() {
 
     private fun clearAllData() {
         stopAllFunctions()
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(stopFunctionalityReceiver)
         isRecording = false
         stopRecording()
         serviceScope.cancel()
@@ -289,25 +388,6 @@ class DetectionServiceForeground : Service() {
         serviceVibScope.cancel()
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
-
-    /**
-     * Initialize and register the BroadcastReceiver to stop functionalities.
-     */
-    private fun initBroadcastReceiver() {
-        stopFunctionalityReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                Log.d(TAG, "Broadcast received to stop functionalities")
-                stopAllFunctions()
-            }
-        }
-        val filter = IntentFilter(ACTION_STOP_FUNCTIONALITY)
-        LocalBroadcastManager
-            .getInstance(this)
-            .registerReceiver(stopFunctionalityReceiver, filter)
-    }
 
     /**
      * Initialize the NotificationChannel and build the notification.
@@ -362,7 +442,6 @@ class DetectionServiceForeground : Service() {
      */
     private fun initializeRecognitionIntent() {
 
-//        muteSpeechRecognizerMicBeepSound(true)
 
         recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en")
@@ -384,11 +463,19 @@ class DetectionServiceForeground : Service() {
             activationType = appStatusManager.getActivationType()
             isAllowedFlashing = appStatusManager.isFlashActive()
             isAllowedVibration = appStatusManager.isVibrationActive()
+            flashlightMode = appStatusManager.getFlashlightMode()
+            vibrationMode = appStatusManager.getVibrationMode()
+            sensitivityLevel = appStatusManager.getSensitivityLevel()
+            duration = appStatusManager.getDurationMode()
+
 
             Log.d(TAG, "Activation type: $activationType")
             Log.d(TAG, "Keyword: $keywords")
-            Log.d(TAG, "Flash allowed: $isAllowedFlashing")
-            Log.d(TAG, "Vibration allowed: $isAllowedVibration")
+            Log.d(TAG, "Flash mode: ${getString(flashlightMode ?: 0)}")
+            Log.d(TAG, "Vibration mode: ${getString(vibrationMode ?: 0)}")
+            Log.d(TAG, "Sensitivity Level: ${getString(sensitivityLevel ?: 0)}")
+            Log.d(TAG, "Duration Level: ${getString(duration ?: 0)}")
+
         } catch (ex: Exception) {
             Log.e(TAG, "Error in checkStatus: ${ex.message}")
         }
@@ -473,133 +560,94 @@ class DetectionServiceForeground : Service() {
         }, DETECTION_DURATION)
     }
 
+
     /**
-     * Handle detections by playing ringtone, vibrating, and flashing.
+     * Handles the detection event by triggering the alarm, playing the ringtone,
+     * vibrating, and flashing the flashlight for the specified duration.
      */
     private fun onDetection() {
         Log.d(TAG, "Detection triggered")
+
+        val context = this
+
         serviceScope.launch {
+            // Broadcast the alarm detection event
             sendAlarmDetectedBroadcast()
-            stopAllDetection()
-            playRingtone(getRingtoneUri())
-            vibrate()
-            flash()
+            showOverlay(context)
         }
-    }
+        // Get the ringtone URI from preferences
+        val ringtoneUri = getRingtoneUri()
 
+        Log.d(TAG, "Detection triggered with duration: $duration")
 
-    /**
-     * Play the ringtone for a specified duration.
-     */
-    private suspend fun playRingtone(ringtoneUri: Uri) {
-        if (mediaPlayer?.isPlaying == true) return
-        withContext(Dispatchers.Main) {
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(applicationContext, ringtoneUri)
-                setAudioStreamType(AudioManager.STREAM_MUSIC)
-                isLooping = true
-                prepare()
-                start()
-                Log.d(TAG, "Ringtone started playing")
+        // Perform actions based on the selected duration mode
+        when (duration) {
+            R.string.duration_5s -> {
+                startAlarmActions(ringtoneUri)
+                timeoutAll(5000L) // Stop after 5 seconds
             }
 
-        }
-    }
-
-    /**
-     * Stop and release the MediaPlayer.
-     */
-    private fun stopRingtone() {
-        mediaPlayer?.let {
-            if (it.isPlaying) {
-                it.stop()
-                Log.d(TAG, "Ringtone stopped")
+            R.string.duration_10s -> {
+                startAlarmActions(ringtoneUri)
+                timeoutAll(10000L) // Stop after 10 seconds
             }
-            it.reset()
-            it.release()
-            Log.d(TAG, "MediaPlayer released")
-        }
-        mediaPlayer = null
-    }
 
-    /**
-     * Vibrate the device with a waveform pattern.
-     */
-    private fun vibrate() {
-        if (!isAllowedVibration) return
+            R.string.duration_30s -> {
+                startAlarmActions(ringtoneUri)
+                timeoutAll(30000L) // Stop after 30 seconds
+            }
 
-        serviceVibScope.launch {
-            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            vibrator?.let {
-                if (it.hasVibrator()) { // Check if the device has a vibrator
-                    try {
-                        while (isActive) { // Keep vibrating as long as the coroutine is active
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                // For Android Oreo and above
-                                val vibrationEffect = VibrationEffect.createOneShot(
-                                    1000, // Duration in milliseconds (1 second)
-                                    VibrationEffect.DEFAULT_AMPLITUDE // Use the default vibration strength
-                                )
-                                it.vibrate(vibrationEffect)
-                                Log.d(TAG, "Vibrating for 1 second using VibrationEffect")
-                            } else {
-                                // For Android versions below Oreo
-                                @Suppress("DEPRECATION") it.vibrate(1000) // Duration in milliseconds (1 second)
-                                Log.d(TAG, "Vibrating for 1 second using deprecated method")
-                            }
+            R.string.duration_1min -> {
+                startAlarmActions(ringtoneUri)
+                timeoutAll(60000L) // Stop after 1 minute
+            }
 
-                            delay(1500L) // Delay between vibrations (1.5 seconds)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error in vibration loop: ${e.message}")
-                    } finally {
-                        it.cancel() // Ensure vibrator is cancelled when exiting
-                    }
-                } else {
-                    Log.e(TAG, "Device does not support vibration")
-                }
-            } ?: run {
-                Log.e(TAG, "Vibrator service not available")
+            R.string.duration_loop -> {
+                startAlarmActions(ringtoneUri) // Continuous loop, no timeout
+                // No need for timeout in loop mode
+            }
+
+            else -> {
+                startAlarmActions(ringtoneUri)
             }
         }
+        stopAllDetection()
+    }
+
+    private fun restartService(context: Context) {
+        // Create an intent for restarting the service
+        val restartIntent = Intent(context, DetectionServiceForeground::class.java)
+
+        // Stop the service (this will trigger the onDestroy callback)
+        stopSelf()
+
+        // Start the service again after a short delay (optional)
+        Handler(Looper.getMainLooper()).postDelayed({
+            context.startService(restartIntent)
+        }, 1000) // Delay restart by 1 second
     }
 
     /**
-     * Flash the camera's torch for a specified pattern.
+     * Starts the alarm actions: ringtone, vibration, and flashlight.
      */
-    private fun flash() {
-        if (!isAllowedFlashing) return
-
-        serviceFlashScope.launch {
-            val cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cameraManager.cameraIdList[0]
-            try {
-
-                // Start an indefinite flashing loop
-                while (isActive) {
-                    // Turn on the flashlight
-                    cameraManager.setTorchMode(cameraId, true)
-                    Log.d(TAG, "Flash turned on")
-
-                    // Pause before turning off
-                    delay(500L)
-
-                    // Turn off the flashlight
-                    cameraManager.setTorchMode(cameraId, false)
-                    Log.d(TAG, "Flash turned off")
-
-                    // Pause before turning on again
-                    delay(500L)
-                }
-            } catch (e: CameraAccessException) {
-                Log.e(TAG, "Error using camera flash: ${e.message}")
-            } finally {
-                // Ensure the torch is turned off when the coroutine exits
-                cameraManager.setTorchMode(cameraId, false)
-                Log.d(TAG, "Flash turned off after loop ended")
-            }
-        }
+    private fun startAlarmActions(ringtoneUri: Uri) {
+        playRingtoneLoop(ringtoneUri)
+        vibrateInLoop(getVibrator())
+        flashInLoop(getCameraManager(), getCameraId())
     }
+
+    private fun getVibrator(): Vibrator {
+        return getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    }
+
+    private fun getCameraManager(): CameraManager {
+        return getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    }
+
+    private fun getCameraId(): String {
+        return getCameraManager().cameraIdList[0]
+    }
+
 
     /**
      * Stop all detection modes.
@@ -618,6 +666,206 @@ class DetectionServiceForeground : Service() {
         stopRingtone()
         handler.removeCallbacksAndMessages(null)
         stopSelf()
+    }
+
+    /**
+     * Plays the ringtone in a continuous loop.
+     */
+    private fun playRingtoneLoop(ringtoneUri: Uri) {
+        if (mediaPlayer?.isPlaying == true) return // Avoid starting if already playing
+
+        mediaPlayer = MediaPlayer().apply {
+            setDataSource(applicationContext, ringtoneUri)
+            setAudioStreamType(AudioManager.STREAM_MUSIC)
+            isLooping = true // Play continuously
+            prepare()
+            start()
+            Log.d(TAG, "Ringtone started playing in loop")
+        }
+    }
+
+    /**
+     * Vibrates the device in a continuous loop based on the selected vibration mode.
+     */
+    private fun vibrateInLoop(vibrator: Vibrator) {
+        if (!isAllowedVibration || vibrationMode == null) return
+
+        serviceVibScope.launch {
+            try {
+                while (isActive) { // Loop vibration until manually stopped
+                    when (vibrationMode) {
+                        R.string.vibration_mode_wave -> vibrateWithPattern(
+                            vibrator, longArrayOf(0, 300, 200, 400, 200)
+                        ) // Custom wave pattern
+                        R.string.vibration_mode_heartbeat -> vibrateWithPattern(
+                            vibrator, longArrayOf(0, 100, 100, 200, 100, 100)
+                        ) // Heartbeat-like pulse
+                        R.string.vibration_mode_short_pulse -> vibrateForDuration(
+                            vibrator, 500
+                        ) // Short pulse vibration for 0.5 seconds
+                        R.string.vibration_mode_long_pulse -> vibrateForDuration(
+                            vibrator, 1500
+                        ) // Long pulse vibration for 1.5 seconds
+                        R.string.vibration_mode_ramp -> vibrateWithPattern(
+                            vibrator, longArrayOf(0, 100, 150, 200, 250, 300)
+                        ) // Gradually increasing pattern
+                    }
+                    delay(2000L) // Delay between vibrations (can adjust as needed)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in vibration loop: ${e.message}")
+            } finally {
+                vibrator.cancel() // Ensure vibration stops if coroutine is cancelled
+            }
+        }
+    }
+
+    /**
+     * Flashes the camera's flashlight in a continuous loop based on the selected flashlight mode.
+     */
+    private fun flashInLoop(cameraManager: CameraManager, cameraId: String) {
+        if (!isAllowedFlashing || flashlightMode == null) return
+
+        serviceFlashScope.launch {
+            try {
+                while (isActive) { // Loop flashlight until manually stopped
+                    when (flashlightMode) {
+                        R.string.flashlight_mode_short_blink -> flashForDuration(
+                            cameraManager, cameraId, 200L
+                        ) // Short blink
+                        R.string.flashlight_mode_long_blink -> flashForDuration(
+                            cameraManager, cameraId, 1000L
+                        ) // Long blink
+                        R.string.flashlight_mode_pulse -> flashForPattern(
+                            cameraManager, cameraId, longArrayOf(300, 300)
+                        ) // Pulse pattern
+                        R.string.flashlight_mode_sos -> flashForPattern(
+                            cameraManager,
+                            cameraId,
+                            longArrayOf(100, 100, 100, 100, 500, 100, 100, 500, 100)
+                        ) // SOS pattern
+                        R.string.flashlight_mode_continuous_on -> cameraManager.setTorchMode(
+                            cameraId, true
+                        ) // Continuous on
+                        R.string.flashlight_mode_strobe -> flashForPattern(
+                            cameraManager, cameraId, longArrayOf(100, 100)
+                        ) // Strobe pattern
+                        R.string.flashlight_mode_firefly -> flashForPattern(
+                            cameraManager, cameraId, longArrayOf(200, 800)
+                        ) // Firefly pattern
+                    }
+                    delay(500L) // General delay between flash patterns (adjust as needed)
+                }
+            } catch (e: CameraAccessException) {
+                Log.e(TAG, "Error using camera flash: ${e.message}")
+            } finally {
+                cameraManager.setTorchMode(
+                    cameraId, false
+                ) // Ensure the flashlight turns off when the loop ends
+            }
+        }
+    }
+
+    /**
+     * Cancels all ongoing operations (ringtone, vibration, flashlight) after the specified timeout.
+     */
+    private fun timeoutAll(timeout: Long) {
+        // Launch a coroutine to handle the timeout
+        serviceScope.launch {
+            delay(timeout) // Wait for the specified timeout
+
+            // Stop the ringtone
+            stopRingtone()
+
+            // Cancel the vibration coroutine scope
+            serviceVibScope.cancel()
+
+            // Cancel the flashlight coroutine scope
+            serviceFlashScope.cancel()
+
+            // Optionally, stop the entire service if needed
+            stopSelf() // Stop the service after everything is canceled
+            Log.d(TAG, "All operations stopped after $timeout ms")
+        }
+    }
+
+    /**
+     * Stops the ringtone by releasing the MediaPlayer resources.
+     */
+    private fun stopRingtone() {
+        mediaPlayer?.let {
+            if (it.isPlaying) {
+                it.stop()
+                Log.d(TAG, "Ringtone stopped")
+            }
+            it.reset()
+            it.release()
+        }
+        mediaPlayer = null
+    }
+
+    /**
+     * Plays a vibration pattern for the specified vibrator.
+     */
+    private fun vibrateWithPattern(vibrator: Vibrator, pattern: LongArray) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val vibrationEffect = VibrationEffect.createWaveform(pattern, -1) // No repeat
+            vibrator.vibrate(vibrationEffect)
+            Log.d(TAG, "Vibrating with custom pattern")
+        } else {
+            @Suppress("DEPRECATION") vibrator.vibrate(pattern, -1) // No repeat for older versions
+            Log.d(TAG, "Vibrating with custom pattern (deprecated method)")
+        }
+    }
+
+    /**
+     * Vibrates for a specified duration.
+     */
+    private fun vibrateForDuration(vibrator: Vibrator, duration: Long) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val vibrationEffect =
+                VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)
+            vibrator.vibrate(vibrationEffect)
+            Log.d(TAG, "Vibrating for $duration ms")
+        } else {
+            @Suppress("DEPRECATION") vibrator.vibrate(duration)
+            Log.d(TAG, "Vibrating for $duration ms (deprecated method)")
+        }
+    }
+
+    /**
+     * Flashes the camera for a specific duration.
+     */
+    private suspend fun flashForDuration(
+        cameraManager: CameraManager, cameraId: String, duration: Long
+    ) {
+        cameraManager.setTorchMode(cameraId, true)
+        Log.d(TAG, "Flash turned on for $duration ms")
+        delay(duration)
+        cameraManager.setTorchMode(cameraId, false)
+        Log.d(TAG, "Flash turned off after $duration ms")
+    }
+
+    /**
+     * Flashes the camera with a custom pattern.
+     */
+    private suspend fun flashForPattern(
+        cameraManager: CameraManager, cameraId: String, pattern: LongArray
+    ) {
+        for (i in pattern.indices step 2) {
+            cameraManager.setTorchMode(cameraId, true)
+            Log.d(TAG, "Flash turned on for ${pattern[i]} ms")
+            delay(pattern[i])
+
+            if (i + 1 < pattern.size) {
+                cameraManager.setTorchMode(cameraId, false)
+                Log.d(TAG, "Flash turned off for ${pattern[i + 1]} ms")
+                delay(pattern[i + 1])
+            } else {
+                cameraManager.setTorchMode(cameraId, false)
+                Log.d(TAG, "Flash turned off at the end of the pattern")
+            }
+        }
     }
 
     /**
@@ -711,4 +959,8 @@ class DetectionServiceForeground : Service() {
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
         }
     }
+
+    // override savedStateRegistry property from SavedStateRegistryOwner interface.
+    override val savedStateRegistry: SavedStateRegistry
+        get() = savedStateRegistryController.savedStateRegistry
 }

@@ -13,17 +13,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarRate
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,14 +27,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,82 +52,96 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gammaplay.findmyphone.R
+import com.gammaplay.findmyphone.data.SettingsGeneralItem
 import com.gammaplay.findmyphone.data.SettingsItem
+import com.gammaplay.findmyphone.presentation.bottomsheets.DurationBottomSheetContent
+import com.gammaplay.findmyphone.presentation.bottomsheets.SensitivityBottomSheetContent
+import com.gammaplay.findmyphone.presentation.bottomsheets.VibrationModesBottomSheetContent
+import com.gammaplay.findmyphone.presentation.settings.SettingsViewModel
+import com.gammaplay.findmyphone.ui.theme.CustomFontFamily
 import com.gammaplay.findmyphone.utils.shadowEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBackPressed: () -> Unit) {
-    val languageActiveCardIndex = remember { mutableIntStateOf(0) }
+fun SettingsScreen(onBackPressed: () -> Unit, settingsViewModel: SettingsViewModel) {
     val languageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var isLanguageSheetOpen by rememberSaveable { mutableStateOf(false) }
     var showRateUsDialog by remember { mutableStateOf(false) }
+    val languageActiveCardIndex by settingsViewModel.languageActiveCardIndex.collectAsState()
     val cornerRadius = 14.dp
-    val items = listOf(
-        SettingsItem(
-            title = stringResource(id = R.string.language),
-            icon = Icons.Filled.Language,
-        ), SettingsItem(
-            title = stringResource(id = R.string.rate_us),
-            icon = Icons.Filled.StarRate,
-        ), SettingsItem(
-            title = stringResource(id = R.string.share_app),
-            icon = Icons.Filled.Share,
-        )
-    )
-    // Precompute string resources
-    val languageTitle = stringResource(id = R.string.language)
-    val rateUsTitle = stringResource(id = R.string.rate_us)
-    val shareAppTitle = stringResource(id = R.string.share_app)
 
-    val languageIcons = listOf(
-        painterResource(id = R.drawable.english),
-        painterResource(id = R.drawable.spain),
-        painterResource(id = R.drawable.french),
-        painterResource(id = R.drawable.german),
-        painterResource(id = R.drawable.italian),
-        painterResource(id = R.drawable.polish),
-        painterResource(id = R.drawable.russian),
-        painterResource(id = R.drawable.sweden),
-        painterResource(id = R.drawable.czech)
-    )
-    val languageContentDescriptions = listOf(
-        stringResource(id = R.string.english),
-        stringResource(id = R.string.spanish),
-        stringResource(id = R.string.french),
-        stringResource(id = R.string.german),
-        stringResource(id = R.string.italian),
-        stringResource(id = R.string.polish),
-        stringResource(id = R.string.russian),
-        stringResource(id = R.string.swedish),
-        stringResource(id = R.string.czech)
-    )
+    val otherItems = settingsViewModel.OtherItems
+    val generalItems = settingsViewModel.generalItems
+    val languageIcons = settingsViewModel.languageIconIds
+    val languageContentDescriptions = settingsViewModel.languageContentDescriptionIds
+
+    var showFlashlightSheet by remember { mutableStateOf(false) }
+    var showVibrationSheet by remember { mutableStateOf(false) }
+    var showDurationSheet by remember { mutableStateOf(false) }
+    var showSensitivitySheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect("fetchAllValues") {
+        settingsViewModel.fetchValues()
+    }
+
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
-            titleContentColor = colorResource(id = R.color.title_text),
-        ), title = {
-            Text(
-                text = stringResource(id = R.string.settings), fontWeight = FontWeight.Bold
-            )
-        }, navigationIcon = {
-            IconButton(onClick = onBackPressed) {
-                Icon(
-                    imageVector = Icons.Outlined.ArrowBack,
-                    contentDescription = stringResource(id = R.string.back),
-                    tint = colorResource(id = R.color.title_text)
+        TopAppBar(
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent,
+                titleContentColor = colorResource(id = R.color.title_text),
+            ),
+            title = {
+                Text(
+                    text = stringResource(id = R.string.settings), fontWeight = FontWeight.Bold
                 )
+            },
+            navigationIcon = {
+                IconButton(onClick = onBackPressed) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = stringResource(id = R.string.back),
+                        tint = colorResource(id = R.color.title_text)
+                    )
+                }
             }
-        })
-        items.forEachIndexed { _, item ->
+        )
+
+        Text(
+            text = stringResource(id = R.string.general),
+            fontFamily = CustomFontFamily,
+            fontSize = 16.sp,
+            color = Color.Gray,
+            modifier = Modifier.padding(vertical = 15.dp, horizontal = 20.dp)
+        )
+
+        generalItems.forEachIndexed { _, item ->
+            SettingsGeneralItemBox(item, cornerRadius) {
+                when (item.title) {
+                    R.string.flashlight -> showFlashlightSheet = true
+                    R.string.vibration -> showVibrationSheet = true
+                    R.string.sensitivity -> showSensitivitySheet = true
+                    R.string.Duration -> showDurationSheet = true
+
+                }
+            }
+        }
+
+        Text(
+            text = stringResource(id = R.string.others),
+            fontFamily = CustomFontFamily,
+            fontSize = 16.sp,
+            color = Color.Gray,
+            modifier = Modifier.padding(vertical = 15.dp, horizontal = 20.dp)
+        )
+        otherItems.forEachIndexed { _, item ->
             SettingsItemBox(item, cornerRadius) {
                 when (item.title) {
-                    languageTitle -> {
+                    R.string.language -> {
                         isLanguageSheetOpen = true
                     }
 
-                    rateUsTitle -> {
+                    R.string.rate_us -> {
                         showRateUsDialog = true
                     }
                 }
@@ -147,58 +155,209 @@ fun SettingsScreen(onBackPressed: () -> Unit) {
                 onDismiss = { isLanguageSheetOpen = false },
                 languagesIcons = languageIcons,
                 contentDescriptions = languageContentDescriptions,
-                activeCardIndex = languageActiveCardIndex,
-                cornerRadius = cornerRadius
+                viewModel = settingsViewModel,
+                cornerRadius = cornerRadius,
+                languageActiveCardIndex
             )
         }
 
         // Rate Us Dialog
         if (showRateUsDialog) {
-            RateUsDialog(onDismiss = { showRateUsDialog = false },
-                onConfirm = { showRateUsDialog = false })
+            CustomRateUsDialog(onDismiss = { showRateUsDialog = false },
+                onSubmit = { showRateUsDialog = false })
         }
+
+        // Flashlight Mode Bottom Sheet
+        // Show Flashlight Mode Bottom Sheet when tapping the Flashlight item
+        if (showFlashlightSheet) {
+            ModalBottomSheet(containerColor = Color.White,
+                onDismissRequest = { showFlashlightSheet = false }) {
+                FlashlightModesBottomSheetContent(
+                    selectedMode = settingsViewModel.generalItems[0].subtitle!!,
+                    flashlightModes = settingsViewModel.flashlightModes,
+                    onOptionSelected = {
+                        // Handle the selected flashlight mode here
+                        settingsViewModel.setFlashlightMode(mode = it)
+                    },
+                    onDismiss = { showFlashlightSheet = false }
+                )
+            }
+        }
+
+
+        if (showVibrationSheet) {
+            ModalBottomSheet(containerColor = Color.White,
+                onDismissRequest = { showVibrationSheet = false }) {
+                VibrationModesBottomSheetContent(
+                    selectedMode = settingsViewModel.generalItems[1].subtitle!!,
+                    vibrationModes = settingsViewModel.vibrationModes,
+                    onOptionSelected = { selectedMode ->
+                        // Handle selected mode
+                        settingsViewModel.setVibrationMode(selectedMode)
+                    },
+                    onDismiss = {
+                        showVibrationSheet = false
+                    }
+                )
+            }
+
+        }
+        if (showDurationSheet) {
+            ModalBottomSheet(containerColor = Color.White,
+                onDismissRequest = { showDurationSheet = false }) {
+                DurationBottomSheetContent(
+                    selectedMode = settingsViewModel.generalItems[2].subtitle!!,
+                    durationModes = settingsViewModel.durationModes,
+                    onOptionSelected = { selectedMode ->
+                        // Handle selected mode
+                        settingsViewModel.setDurationMode(selectedMode)
+                    },
+                    onDismiss = {
+                        showDurationSheet = false
+                    }
+                )
+            }
+
+        }
+        if (showSensitivitySheet) {
+            ModalBottomSheet(containerColor = Color.White,
+                onDismissRequest = { showSensitivitySheet = false }) {
+                SensitivityBottomSheetContent(
+                    selectedMode = settingsViewModel.generalItems[3].subtitle!!,
+                    sensitivityLevels = settingsViewModel.sensitivityLevels,
+                    onOptionSelected = { selectedMode ->
+                        // Handle selected mode
+                        settingsViewModel.setSensitivityMode(selectedMode)
+                    },
+                    onDismiss = {
+                        showSensitivitySheet = false
+                    }
+                )
+            }
+
+        }
+
+
     }
 }
 
 @Composable
 fun SettingsItemBox(item: SettingsItem, cornerRadius: Dp, onClick: () -> Unit) {
-    Box(modifier = Modifier
-        .fillMaxWidth()
-        .padding(14.dp, 2.dp, 14.dp, 2.dp)
-        .shadowEffect(cornerRadius)
-        .clip(RoundedCornerShape(cornerRadius))
-        .background(Color.White)
-        .clickable { onClick() }) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp, 2.dp, 14.dp, 2.dp)
+            .shadowEffect(cornerRadius)
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(Color.White)
+            .clickable { onClick() }
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(28.dp, 14.dp, 28.dp, 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = item.title,
-                color = colorResource(id = R.color.title_text),
-                fontWeight = FontWeight.SemiBold
-            )
+            // Icon at the start
             Icon(
                 imageVector = item.icon,
-                contentDescription = item.title,
-                tint = colorResource(id = R.color.title_text)
+                contentDescription = stringResource(id = item.title),
+                tint = colorResource(id = R.color.title_text),
+                modifier = Modifier.size(34.dp)
             )
+
+            Spacer(modifier = Modifier.width(16.dp)) // Space between icon and text
+
+            // Column for title and subtitle
+            Column(
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(id = item.title),
+                    color = colorResource(id = R.color.title_text),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+                item.subtitle?.let {
+                    Text(
+                        text = stringResource(id = it),
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp
+                    )
+                }
+
+            }
         }
     }
 }
+
+
+@Composable
+fun SettingsGeneralItemBox(item: SettingsGeneralItem, cornerRadius: Dp, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp, 2.dp, 14.dp, 2.dp)
+            .shadowEffect(cornerRadius)
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(Color.White)
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(28.dp, 14.dp, 28.dp, 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Icon at the start
+            Icon(
+                painter = painterResource(id = item.icon),
+                contentDescription = stringResource(id = item.title),
+                tint = colorResource(id = R.color.title_text),
+                modifier = Modifier.size(34.dp)
+            )
+
+            Spacer(modifier = Modifier.width(16.dp)) // Space between icon and text
+
+            // Column for title and subtitle
+            Column(
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(id = item.title),
+                    color = colorResource(id = R.color.title_text),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+
+                item.subtitle?.let {
+                    Text(
+                        text = stringResource(id = it),
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp
+                    )
+                }
+
+            }
+        }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LanguageBottomSheet(
     sheetState: SheetState,
     onDismiss: () -> Unit,
-    languagesIcons: List<Painter>,
-    contentDescriptions: List<String>,
-    activeCardIndex: MutableState<Int>,
-    cornerRadius: Dp
+    languagesIcons: List<Int>,
+    contentDescriptions: List<Int>,
+    viewModel: SettingsViewModel,
+    cornerRadius: Dp,
+    languageActiveCardIndex: Int
 ) {
     ModalBottomSheet(
         sheetState = sheetState,
@@ -225,10 +384,10 @@ fun LanguageBottomSheet(
         ) {
             items(languagesIcons.size) { index ->
                 LanguageCard(
-                    painter = languagesIcons[index],
-                    description = contentDescriptions[index],
-                    isSelected = activeCardIndex.value == index,
-                    onClick = { activeCardIndex.value = index },
+                    painter = painterResource(id = languagesIcons[index]),
+                    description = stringResource(id = contentDescriptions[index]),
+                    isSelected = languageActiveCardIndex == index,
+                    onClick = { viewModel.setActiveCardIndex(index) },
                     cornerRadius = cornerRadius
                 )
             }
@@ -248,6 +407,7 @@ fun LanguageBottomSheet(
         Spacer(modifier = Modifier.height(48.dp))
     }
 }
+
 
 @Composable
 fun LanguageCard(
@@ -277,50 +437,5 @@ fun LanguageCard(
     }
 }
 
-@Composable
-fun RateUsDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(containerColor = Color.White, onDismissRequest = onDismiss, title = {
-        Text(
-            text = stringResource(id = R.string.let_us_know),
-            modifier = Modifier.padding(14.dp),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = colorResource(id = R.color.title_text)
-        )
-    }, text = {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val activeStarIndex = remember { mutableStateOf(5) }
-            for (i in 1..5) {
-                Icon(
-                    imageVector = if (activeStarIndex.value < i) Icons.Outlined.StarBorder else Icons.Filled.Star,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clickable { activeStarIndex.value = i },
-                    tint = if (activeStarIndex.value < i) colorResource(id = R.color.title_text)
-                    else colorResource(id = R.color.accent)
-                )
-            }
-        }
-    }, confirmButton = {
-        TextButton(onClick = onConfirm) {
-            Text(
-                text = stringResource(id = R.string.rate_us_confirm),
-                color = colorResource(id = R.color.accent)
-            )
-        }
-    }, dismissButton = {
-        TextButton(onClick = onDismiss) {
-            Text(
-                text = stringResource(id = R.string.cancel),
-                color = colorResource(id = R.color.title_text)
-            )
-        }
-    })
-}
 
 

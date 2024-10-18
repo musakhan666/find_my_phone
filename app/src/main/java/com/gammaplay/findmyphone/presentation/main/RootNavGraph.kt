@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import com.gammaplay.findmyphone.AppState
 import com.gammaplay.findmyphone.presentation.home.HomeScreen
 import com.gammaplay.findmyphone.presentation.home.HomeViewModel
+import com.gammaplay.findmyphone.presentation.settings.SettingsViewModel
 import com.gammaplay.findmyphone.presentation.tutorial.TutorialScreen
 import com.gammaplay.findmyphone.utils.AppStatusManager
 
@@ -44,9 +45,23 @@ private fun NavGraphBuilder.AppGraph(
     homeViewModel: HomeViewModel
 ) {
 
-    composable(Graph.HOME) { HomeScreen(openAndPopUp = { route -> appState.clearAndNavigate(route) }, homeViewModel) }
-    composable(Graph.SETTINGS) { SettingsScreen(onBackPressed = { appState.popUp() }) }
-    composable(Graph.TUTORIAL) { TutorialScreen(openAndPopUp = { route -> appState.clearAndNavigate(route) }) }
+    composable(Graph.HOME) {
+        HomeScreen(
+            openAndPopUp = { route -> appState.clearAndNavigate(route) },
+            homeViewModel
+        )
+    }
+    composable(Graph.SETTINGS) {
+        val settingsViewModel: SettingsViewModel = hiltViewModel()
+        SettingsScreen(onBackPressed = { appState.popUp() }, settingsViewModel)
+    }
+    composable(Graph.TUTORIAL) {
+        TutorialScreen(openAndPopUp = { route ->
+            appState.clearAndNavigate(
+                route
+            )
+        })
+    }
 }
 
 @Composable
