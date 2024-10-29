@@ -138,8 +138,8 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
         initializeRecognitionIntent()
 
         // Check and apply activation settings
+        activationType = appStatusManager.getActivationType()
         checkStatus()
-
 
     }
 
@@ -150,7 +150,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
         sendBroadcast(intent)
     }
 
-    private  fun reinitialize() {
+    private fun reinitialize() {
         // Initialize Speech Recognizer
         initializeSpeechRecognizer()
 
@@ -230,7 +230,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
             Thread { detectClaps() }.start() // Start the clap detection in a separate thread
             isClapDetectionActive = true
             Log.d(TAG, "Clap detection started after 4 seconds delay")
-        }, 4000) // Delay execution by 2000 milliseconds (2 seconds)
+        }, 500) // Delay execution by 2000 milliseconds (2 seconds)
     }
 
     private var contentView: ComposeView? = null
@@ -245,6 +245,8 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
                 RippleEffectOverlayScreen {
                     removeOverlay()
                     restartService(context)
+                    // Always bring the app to the foreground when the overlay appears
+                    openApp(context)
 
                 }
             }
@@ -262,6 +264,15 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
 
         windowManager.addView(contentView, params)
     }
+
+    // Function to bring the app to the foreground (or launch it if not running)
+    private fun openApp(context: Context) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        context.startActivity(intent)
+    }
+
 
     // Function to remove the overlay
     private fun removeOverlay() {
@@ -326,7 +337,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
                             firstClapTime = currentTime
                             Log.d(
                                 "Clap Detection",
-                                "First clap detected at sensitivity: $sensitivityLevel!"
+                                "First clap detected at sensitivity: ${getString(sensitivityLevel ?: 0)}"
                             )
                         } else {
                             // Check if the second clap happens within the allowed interval
@@ -460,7 +471,6 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
     private fun checkStatus() {
         try {
             keywords = appStatusManager.getKeywordForVoiceRecognition()
-            activationType = appStatusManager.getActivationType()
             isAllowedFlashing = appStatusManager.isFlashActive()
             isAllowedVibration = appStatusManager.isVibrationActive()
             flashlightMode = appStatusManager.getFlashlightMode()
@@ -568,6 +578,8 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
     private fun onDetection() {
         Log.d(TAG, "Detection triggered")
 
+        checkStatus()
+
         val context = this
 
         serviceScope.launch {
@@ -624,7 +636,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
         // Start the service again after a short delay (optional)
         Handler(Looper.getMainLooper()).postDelayed({
             context.startService(restartIntent)
-        }, 1000) // Delay restart by 1 second
+        }, 500) // Delay restart by few seconds
     }
 
     /**
@@ -783,8 +795,6 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
             // Cancel the flashlight coroutine scope
             serviceFlashScope.cancel()
 
-            // Optionally, stop the entire service if needed
-            stopSelf() // Stop the service after everything is canceled
             Log.d(TAG, "All operations stopped after $timeout ms")
         }
     }

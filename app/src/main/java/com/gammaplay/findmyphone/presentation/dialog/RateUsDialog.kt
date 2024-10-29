@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -46,7 +47,7 @@ fun CustomRateUsDialog(
             ) {
                 // Icon
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_thumbsup), // Replace with your icon
+                    imageVector = Icons.Filled.ThumbUp,
                     contentDescription = null,
                     modifier = Modifier
                         .padding(20.dp)

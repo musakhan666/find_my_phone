@@ -18,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +34,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gammaplay.findmyphone.R
@@ -95,47 +98,58 @@ fun DurationBottomSheetContent(
                 containerColor = Color(0xFF6200EE),
                 contentColor = Color.White
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 20.dp)
+
         ) {
             Text(text = stringResource(id = R.string.ok))
         }
+        Spacer(modifier = Modifier.height(20.dp))
+
     }
 }
 
 @Composable
-fun DurationButton(mode: Int, isSelected: Boolean, onSelectMode: () -> Unit) {
-    Button(
-        onClick = { onSelectMode() },
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) colorResource(id = R.color.big_btn_active) else Color.White,
-            contentColor = if (isSelected) Color.White else Color.Black
-        ),
-        border = if (isSelected) null else BorderStroke(1.dp, SolidColor(Color.Black)),
-        shape = RoundedCornerShape(10.dp),
-        modifier = Modifier
-            .padding(horizontal = 1.5.dp)
-            .height(50.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            if (isSelected) {
+fun DurationButton(
+    mode: Int,
+    isSelected: Boolean,
+    onSelectMode: () -> Unit
+) {
+    val backgroundColor =
+        if (isSelected) colorResource(id = R.color.big_btn_active) else Color.Transparent
+    FilterChip(
+        selected = isSelected,
+        onClick = onSelectMode,
+        label = {
+            Text(
+                text = stringResource(id = mode),
+                textAlign = TextAlign.Center,
+                fontSize = 13.sp
+            )
+        },
+        leadingIcon = if (isSelected) {
+            {
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
                     tint = Color.White
                 )
-                Spacer(modifier = Modifier.width(4.dp))
             }
-
-            Text(
-                text = stringResource(id = mode),
-                color = if (isSelected) Color.White else Color.Black,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Normal
-            )
-        }
-    }
+        } else null,
+        colors = FilterChipDefaults.filterChipColors(
+            labelColor = colorResource(id = R.color.title_text),
+            selectedLabelColor = Color.White,
+            selectedLeadingIconColor = Color.White,
+            selectedContainerColor = colorResource(id = R.color.big_btn_active),
+            containerColor = backgroundColor
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            borderColor = colorResource(id = R.color.title_text),
+            selectedBorderColor = colorResource(id = R.color.big_btn_active),
+            enabled = true,
+            selected = isSelected
+        )
+    )
 }

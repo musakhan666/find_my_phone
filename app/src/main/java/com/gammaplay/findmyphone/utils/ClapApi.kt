@@ -1,188 +1,142 @@
-package com.gammaplay.findmyphone.utils;
+package com.gammaplay.findmyphone.utils
 
-import com.gammaplay.findmyphone.R;
-import com.musicg.api.DetectionApi;
-import com.musicg.wave.WaveHeader;
-
-import java.util.List;
+import com.gammaplay.findmyphone.R
+import com.musicg.api.DetectionApi
+import com.musicg.wave.WaveHeader
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 class ClapApi(waveHeader: WaveHeader?) : DetectionApi(waveHeader) {
+
     private var minClapFrequency = 1000.0
     private var maxClapFrequency = 10000.0
 
     init {
-        init() // Default initialization
+        init()
     }
 
     override fun init() {
-        // Set default parameters for clap detection
-        this.minFrequency = 1000.0
-        this.maxFrequency = Double.MAX_VALUE
-        this.minIntensity = 10000.0
-        this.maxIntensity = 100000.0
-        this.minStandardDeviation = 0.0
-        this.maxStandardDeviation = 0.05000000074505806
-        this.highPass = 100
-        this.lowPass = 10000
-        this.minNumZeroCross = 100
-        this.maxNumZeroCross = 500
-        this.numRobust = 4
+        // Default clap detection parameters
+        minFrequency = 1000.0
+        maxFrequency = Double.MAX_VALUE
+        minIntensity = 10000.0
+        maxIntensity = 100000.0
+        minStandardDeviation = 0.0
+        maxStandardDeviation = 0.05
+        highPass = 100
+        lowPass = 10000
+        minNumZeroCross = 100
+        maxNumZeroCross = 500
+        numRobust = 4
     }
 
-    // Adjust detection based on sensitivity levels
+    // Set sensitivity levels based on predefined parameters
     fun setSensitivity(sensitivityLevelId: Int) {
-        when (sensitivityLevelId) {
-            R.string.sensitivity_low -> {
-                // Raise minIntensity and narrow frequency range for softer sounds
-                this.minIntensity = 25000.0
-                this.maxIntensity = 50000.0
-                this.minFrequency = 1500.0
-                this.maxFrequency = 8000.0
-                this.minClapFrequency = 1500.0
-                this.maxClapFrequency = 8000.0
-            }
-            R.string.sensitivity_medium -> {
-                this.minIntensity = 20000.0
-                this.maxIntensity = 70000.0
-                this.minFrequency = 1200.0
-                this.maxFrequency = 9000.0
-                this.minClapFrequency = 1200.0
-                this.maxClapFrequency = 7000.0
-            }
-            R.string.sensitivity_high -> {
-                this.minIntensity = 15000.0
-                this.maxIntensity = 90000.0
-                this.minFrequency = 1000.0
-                this.maxFrequency = 8000.0
-                this.minClapFrequency = 1000.0
-                this.maxClapFrequency = 6000.0
-            }
-            R.string.sensitivity_maximum -> {
-                // Maintain default parameters for maximum sensitivity
-                this.minIntensity = 10000.0
-                this.maxIntensity = 100000.0
-                this.minFrequency = 1000.0
-                this.maxFrequency = 5000.0
-                this.minClapFrequency = 1000.0
-                this.maxClapFrequency = 5000.0
-            }
-            else -> {
-                // Default to medium sensitivity if unknown
-                this.minIntensity = 15000.0
-                this.maxIntensity = 70000.0
-                this.minFrequency = 1200.0
-                this.maxFrequency = 9000.0
-                this.minClapFrequency = 1200.0
-                this.maxClapFrequency = 7000.0
-            }
+        val settings = when (sensitivityLevelId) {
+            R.string.sensitivity_low -> SensitivitySettings(25000.0, 50000.0, 1500.0, 8000.0)
+            R.string.sensitivity_medium -> SensitivitySettings(20000.0, 70000.0, 1200.0, 9000.0)
+            R.string.sensitivity_high -> SensitivitySettings(15000.0, 90000.0, 1000.0, 8000.0)
+            R.string.sensitivity_maximum -> SensitivitySettings(10000.0, 100000.0, 1000.0, 5000.0)
+            else -> SensitivitySettings(15000.0, 70000.0, 1200.0, 9000.0)
         }
+
+        minIntensity = settings.minIntensity
+        maxIntensity = settings.maxIntensity
+        minFrequency = settings.minFrequency
+        maxFrequency = settings.maxFrequency
+        minClapFrequency = settings.minFrequency
+        maxClapFrequency = settings.maxFrequency
     }
 
+    // Checks if audio data represents a clap
     fun isClap(audioBytes: ByteArray): Boolean {
-        // Check if the audio data matches the clap characteristics
-        if (isSpecificSound(audioBytes) &&
-            isWithinFrequencyRange(audioBytes, minClapFrequency, maxClapFrequency)) {
-            return true;
-        } else {
-            return false;
-        }
+        return isSpecificSound(audioBytes) && isWithinFrequencyRange(audioBytes)
     }
 
-    private fun isWithinFrequencyRange(audioBytes: ByteArray, minFrequency: Double, maxFrequency: Double): Boolean {
-        // Implement a more accurate frequency analysis using FFT or other spectral analysis techniques
+    private fun isWithinFrequencyRange(audioBytes: ByteArray): Boolean {
         val fft = FFT(audioBytes.size)
         fft.forwardTransform(audioBytes)
-
-        val magnitudes = fft.getMagnitudes()
         val frequencies = fft.getFrequencies()
-
-        for (i in magnitudes.indices) {
-            if (magnitudes[i] > 0 && frequencies[i] >= minFrequency && frequencies[i] <= maxFrequency) {
-                return true
-            }
-        }
-
-        return false
+        return frequencies.any { it in minClapFrequency..maxClapFrequency }
     }
 
-    private class FFT(n: Int) {
-        private val n: Int = n.coerceIn(1, 2048)
-        private val n2: Int = n shr 1
-        private val logN: Int = 31 - Integer.numberOfLeadingZeros(n)
-        private val omega: Array<Complex> = Array(n) { Complex(0.0, 0.0) }
-        private val reverse: IntArray = IntArray(n)
+    // Settings for sensitivity levels
+    private data class SensitivitySettings(
+        val minIntensity: Double,
+        val maxIntensity: Double,
+        val minFrequency: Double,
+        val maxFrequency: Double
+    )
+
+    // FFT implementation
+    private class FFT(private val n: Int) {
+        private val halfN = n / 2
+        private val logN = 31 - Integer.numberOfLeadingZeros(n)
+        private val omega = Array(n) { Complex(0.0, 0.0) }
+        private val reverse = IntArray(n)
 
         init {
-            var i = 0
-            var j = 0
-            while (i < n) {
-                reverse[i] = j
-                j = j shr 1
-                if (j >= n2) {
-                    j = j xor n2
-                }
-                i++
+            for (i in 0 until n) {
+                reverse[i] = i.reverseBits(logN)
             }
-
-            for (i in 0 until n2) {
-                val angle = -2 * Math.PI * i / n
-                omega[i] = Complex(Math.cos(angle), Math.sin(angle))
+            for (i in 0 until halfN) {
+                val angle = -2 * PI * i / n
+                omega[i] = Complex(cos(angle), sin(angle))
             }
         }
 
         fun forwardTransform(data: ByteArray) {
-            val complexData = Array(n) { Complex(0.0, 0.0) }
-            for (i in 0 until n) {
-                complexData[i] = Complex(data[i].toDouble() / 127.0, 0.0)
-            }
+            val complexData = Array(n) { i -> Complex(data.getOrNull(i)?.toDouble()?.div(127.0) ?: 0.0, 0.0) }
+            bitReverseCopy(complexData)
+            performFFT(complexData)
+        }
 
+        private fun bitReverseCopy(data: Array<Complex>) {
             for (i in 0 until n) {
-                complexData[reverse[i]] = complexData[i]
+                if (i < reverse[i]) {
+                    val temp = data[i]
+                    data[i] = data[reverse[i]]
+                    data[reverse[i]] = temp
+                }
             }
+        }
 
-            for (step in 1 until logN) {
-                val stepSize = 1 shl step
-                val halfStepSize = stepSize shr 1
-                for (group in 0 until n step stepSize) {
-                    for (i in 0 until halfStepSize) {
-                        val omegaI = omega[i shl (logN - step)]
-                        val t = omegaI * complexData[group + i + halfStepSize]
-                        complexData[group + i + halfStepSize] = complexData[group + i] - t
-                        complexData[group + i] = complexData[group + i] + t
+        private fun performFFT(data: Array<Complex>) {
+            for (s in 1..logN) {
+                val m = 1 shl s
+                val m2 = m / 2
+                for (k in 0 until n step m) {
+                    for (j in 0 until m2) {
+                        val t = omega[j * (halfN / m2)] * data[k + j + m2]
+                        data[k + j + m2] = data[k + j] - t
+                        data[k + j] = data[k + j] + t
                     }
                 }
             }
         }
 
-        fun getMagnitudes(): DoubleArray {
-            val magnitudes = DoubleArray(n)
-            for (i in 0 until n) {
-                magnitudes[i] = Math.sqrt(omega[i].re * omega[i].re + omega[i].im * omega[i].im)
-            }
-            return magnitudes
-        }
-
-        fun getFrequencies(): DoubleArray {
-            val sampleRate = 44100.0 // Adjust sample rate as needed
-            val frequencies = DoubleArray(n)
-            for (i in 0 until n) {
-                frequencies[i] = i * sampleRate / n
-            }
-            return frequencies
+        fun getFrequencies(): List<Double> {
+            val sampleRate = 44100.0
+            return List(n / 2) { it * sampleRate / n }
         }
     }
 
-    data class Complex(val re: Double, val im: Double) {
-        operator fun plus(other: Complex): Complex {
-            return Complex(re + other.re, im + other.im)
-        }
-
-        operator fun minus(other: Complex): Complex {
-            return Complex(re - other.re, im - other.im)
-        }
-
-        operator fun times(other: Complex): Complex {
-            return Complex(re * other.re - im * other.im, re * other.im + im * other.re)
-        }
+    // Complex number for FFT calculations
+    private data class Complex(val re: Double, val im: Double) {
+        operator fun plus(other: Complex) = Complex(re + other.re, im + other.im)
+        operator fun minus(other: Complex) = Complex(re - other.re, im - other.im)
+        operator fun times(other: Complex) = Complex(re * other.re - im * other.im, re * other.im + im * other.re)
     }
+}
+
+// Extension function for reversing bits (for FFT bit-reversal permutation)
+private fun Int.reverseBits(bits: Int): Int {
+    var x = this
+    var y = 0
+    repeat(bits) {
+        y = (y shl 1) or (x and 1)
+        x = x shr 1
+    }
+    return y
 }

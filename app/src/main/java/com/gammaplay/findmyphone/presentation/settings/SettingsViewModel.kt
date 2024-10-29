@@ -64,13 +64,13 @@ class SettingsViewModel @Inject constructor(@ApplicationContext private val appl
 
 
     val flashlightModes = listOf(
-        R.string.flashlight_mode_short_blink,
         R.string.flashlight_mode_long_blink,
+        R.string.flashlight_mode_short_blink,
         R.string.flashlight_mode_pulse,
         R.string.flashlight_mode_sos,
-        R.string.flashlight_mode_continuous_on,
         R.string.flashlight_mode_strobe,
-        R.string.flashlight_mode_firefly
+        R.string.flashlight_mode_firefly,
+        R.string.flashlight_mode_continuous_on
     )
 
 
@@ -118,21 +118,17 @@ class SettingsViewModel @Inject constructor(@ApplicationContext private val appl
     val generalItems = listOf(
         SettingsGeneralItem(
             title = R.string.flashlight,
-            icon = R.drawable.ic_flashlight,
-            subtitle = R.string.flashlight_mode_short_blink
+            icon = R.drawable.ic_flashlight
         ), SettingsGeneralItem(
             title = R.string.vibration,
-            icon = R.drawable.ic_vibration,
-            subtitle = R.string.vibration_mode_wave
+            icon = R.drawable.ic_vibration
         ), SettingsGeneralItem(
             title = R.string.Duration,
-            icon = R.drawable.ic_timelapse,
-            subtitle = R.string.duration_loop
+            icon = R.drawable.ic_timelapse
         ),
         SettingsGeneralItem(
             title = R.string.sensitivity,
-            icon = R.drawable.ic_sensor,
-            subtitle = R.string.sensitivity_medium
+            icon = R.drawable.ic_sensor
         )
     )
 

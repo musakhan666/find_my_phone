@@ -1,6 +1,6 @@
 plugins {
-    id("com.android.application") version "8.3.1"
-    id("org.jetbrains.kotlin.android") version "1.9.0"
+    id("com.android.application") version "8.3.2"
+    id("org.jetbrains.kotlin.android") version "1.9.25"
     id("com.google.dagger.hilt.android") version "2.48"
     id("org.jetbrains.kotlin.kapt")
 
@@ -45,7 +45,7 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
+        kotlinCompilerExtensionVersion = "1.5.15"
     }
     packaging {
         resources {
@@ -74,7 +74,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-service:2.6.0")
 
 
-
     // Additional Compose and testing dependencies
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -95,8 +94,8 @@ dependencies {
 
 
     implementation ("androidx.compose.material:material-icons-extended:1.6.4")
-    implementation ("androidx.navigation:navigation-compose:2.7.7")
+    implementation ("androidx.navigation:navigation-compose:2.8.3")
     implementation ("com.google.accompanist:accompanist-systemuicontroller:0.35.0-alpha")
-    implementation("androidx.compose.material3:material3:1.2.0")  // Update to latest stable version
+    implementation("androidx.compose.material3:material3:1.3.0")  // Update to latest stable version
 
 }

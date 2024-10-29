@@ -10,8 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.gammaplay.findmyphone.R
-import com.gammaplay.findmyphone.utils.service.DetectionServiceForeground
 import com.gammaplay.findmyphone.utils.AppStatusManager
+import com.gammaplay.findmyphone.utils.service.DetectionServiceForeground
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -180,9 +180,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun submit(keyword: String?) {
-        if (keyword.isNullOrEmpty().not()) serviceStatusManager.setKeywordForVoiceRecognition(
-            keyword
-        )
+        if (keyword.isNullOrEmpty().not()) serviceStatusManager.setKeywordForVoiceRecognition(keyword)
     }
 
     fun setSound() {

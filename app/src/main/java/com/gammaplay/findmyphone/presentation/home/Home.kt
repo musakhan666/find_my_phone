@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.provider.Settings
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -74,6 +73,7 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -121,12 +121,11 @@ fun HomeScreen(
     DisposableEffect(Unit) {
         // Registering the receiver
         val filter = IntentFilter("com.gammaplay.findmyphone.ALARM_DETECTION")
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android U (API 34)
             context.registerReceiver(
                 alarmDetectionReceiver,
                 filter,
-                ComponentActivity.RECEIVER_EXPORTED
+                Context.RECEIVER_NOT_EXPORTED
             )
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
@@ -744,7 +743,7 @@ fun FilterChipOption(isVibration: Boolean, selected: Boolean, homeViewModel: Hom
     val text = if (isVibration) "Vibration" else "Flashlight"
     FilterChip(onClick = { if (isVibration) homeViewModel.toggleActivatedVibration() else homeViewModel.toggleFlashActivation() },
         label = {
-            Text(text)
+            Text(text, textAlign = TextAlign.Center)
         },
         selected = selected,
         leadingIcon = if (selected) {

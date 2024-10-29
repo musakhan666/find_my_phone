@@ -5,17 +5,12 @@ import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -51,9 +46,11 @@ fun VibrationModesBottomSheetContent(
         )
 
         // Vibration mode buttons (reuse FlashlightModeButton with minor adjustments if necessary)
-        ModesGrid(modes = vibrationModes, selectedMode = selectedMode) {
-            selectedMode = it
-        }
+        ModesGrid(
+            isFlashLight = false,
+            modes = vibrationModes,
+            selectedMode = selectedMode
+        ) { selectedMode = it }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -65,7 +62,12 @@ fun VibrationModesBottomSheetContent(
         ) {
             // "Play Test" button
             Button(
-                onClick = { playTestVibrationMode(context, selectedMode) },  // Implement the logic for vibration play test
+                onClick = {
+                    playTestVibrationMode(
+                        context,
+                        selectedMode
+                    )
+                },  // Implement the logic for vibration play test
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.Gray,
                     contentColor = Color.White
@@ -95,7 +97,11 @@ fun VibrationModesBottomSheetContent(
             ) {
                 Text(text = stringResource(id = R.string.ok))
             }
+
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
     }
 }
 
@@ -112,10 +118,35 @@ fun playTestVibrationMode(context: Context, mode: Int) {
     // Define vibration patterns for each mode (approximately 2 seconds each)
     val vibrationPattern = when (mode) {
         R.string.vibration_mode_wave -> longArrayOf(0, 300, 200, 300, 200, 300, 700) // Wave pattern
-        R.string.vibration_mode_heartbeat -> longArrayOf(0, 400, 200, 400, 1000) // Heartbeat-like pulses
-        R.string.vibration_mode_short_pulse -> longArrayOf(0, 200, 200, 200, 400, 1000) // Short quick pulses
-        R.string.vibration_mode_long_pulse -> longArrayOf(0, 800, 400, 800) // Long pulses with pauses
-        R.string.vibration_mode_ramp -> longArrayOf(0, 400, 400, 400, 400, 400) // Increasing intensity
+        R.string.vibration_mode_heartbeat -> longArrayOf(
+            0,
+            400,
+            200,
+            400,
+            1000
+        ) // Heartbeat-like pulses
+        R.string.vibration_mode_short_pulse -> longArrayOf(
+            0,
+            200,
+            200,
+            200,
+            400,
+            1000
+        ) // Short quick pulses
+        R.string.vibration_mode_long_pulse -> longArrayOf(
+            0,
+            800,
+            400,
+            800
+        ) // Long pulses with pauses
+        R.string.vibration_mode_ramp -> longArrayOf(
+            0,
+            400,
+            400,
+            400,
+            400,
+            400
+        ) // Increasing intensity
         else -> longArrayOf(0) // Default case, no vibration
     }
 
