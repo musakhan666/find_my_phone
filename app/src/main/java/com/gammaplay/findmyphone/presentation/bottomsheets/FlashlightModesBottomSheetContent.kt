@@ -134,6 +134,8 @@ fun ModesGrid(
                 ModeChip(
                     mode = modes.last(),
                     isSelected = selectedMode == modes.last(),
+                    modifier = Modifier.wrapContentWidth(),
+                    textModifier = Modifier.wrapContentWidth(),
                     onSelectMode = { onSelectMode(modes.last()) },
                 )
             }
@@ -144,36 +146,28 @@ fun ModesGrid(
 fun ModeChip(
     mode: Int,
     isSelected: Boolean,
+    modifier: Modifier = Modifier
+        .padding(horizontal = 2.dp)
+        .fillMaxWidth(),
+    textModifier: Modifier = Modifier.fillMaxWidth(),
     onSelectMode: () -> Unit
 ) {
     val backgroundColor =
         if (isSelected) colorResource(id = R.color.big_btn_active) else Color.Transparent
 
     FilterChip(
-        modifier = Modifier
-            .wrapContentWidth(),
+        modifier = modifier,
         onClick = onSelectMode,
         label = {
             Text(
                 text = stringResource(id = mode),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
-                fontSize = 13.sp,
-                modifier = Modifier.wrapContentWidth() // Allow text to expand to its content
-
+                fontSize = 14.sp,
+                modifier = textModifier
             )
         },
         selected = isSelected,
-        leadingIcon = if (isSelected) {
-            {
-                Icon(
-                    imageVector = Icons.Filled.Done,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(FilterChipDefaults.IconSize)
-                )
-            }
-        } else null,
         colors = FilterChipDefaults.filterChipColors(
             labelColor = colorResource(id = R.color.title_text),
             selectedLabelColor = Color.White,

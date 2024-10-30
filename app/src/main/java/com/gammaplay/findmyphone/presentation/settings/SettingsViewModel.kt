@@ -1,6 +1,8 @@
 package com.gammaplay.findmyphone.presentation.settings
 
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Share
@@ -10,6 +12,8 @@ import com.gammaplay.findmyphone.R
 import com.gammaplay.findmyphone.data.SettingsGeneralItem
 import com.gammaplay.findmyphone.data.SettingsItem
 import com.gammaplay.findmyphone.utils.AppStatusManager
+import com.gammaplay.findmyphone.utils.isServiceRunning
+import com.gammaplay.findmyphone.utils.service.DetectionServiceForeground
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +32,10 @@ class SettingsViewModel @Inject constructor(@ApplicationContext private val appl
     fun setActiveCardIndex(index: Int) {
         _languageActiveCardIndex.value = index
         OtherItems[0].subtitle = languageContentDescriptionIds[index]
+        serviceStatusManager.setLanguage(languageContentDescriptionIds[index])
+
     }
+
 
     fun fetchValues() {
         generalItems[0].subtitle = serviceStatusManager.getFlashlightMode()
@@ -59,7 +66,24 @@ class SettingsViewModel @Inject constructor(@ApplicationContext private val appl
     fun setSensitivityMode(mode: Int) {
         generalItems[3].subtitle = mode
         serviceStatusManager.setSensitivityLevel(mode)
+        if (isServiceRunning(application, DetectionServiceForeground::class.java)) {
+            stopService()
+            startService()
+        }
+    }
 
+    private fun startService() {
+        val serviceIntent = Intent(application, DetectionServiceForeground::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            application.startForegroundService(serviceIntent)
+        } else {
+            application.startService(serviceIntent)
+        }
+    }
+
+    private fun stopService() {
+        val serviceIntent = Intent(application, DetectionServiceForeground::class.java)
+        application.stopService(serviceIntent)
     }
 
 

@@ -108,25 +108,16 @@ fun SensitivityBottomSheetContent(
 fun SensitivityButton(level: Int, isSelected: Boolean, onSelectLevel: () -> Unit) {
     val backgroundColor =
         if (isSelected) colorResource(id = R.color.big_btn_active) else Color.Transparent
-    FilterChip(selected = isSelected,
+    FilterChip(
+        selected = isSelected,
         onClick = onSelectLevel,
         label = {
             Text(
                 text = stringResource(id = level),
                 textAlign = TextAlign.Center,
-                fontSize = 13.sp
+                fontSize = 14.sp
             )
         },
-        leadingIcon = if (isSelected) {
-            {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = Color.White
-                )
-            }
-        } else null,
         colors = FilterChipDefaults.filterChipColors(
             labelColor = colorResource(id = R.color.title_text),
             selectedLabelColor = Color.White,
@@ -139,5 +130,6 @@ fun SensitivityButton(level: Int, isSelected: Boolean, onSelectLevel: () -> Unit
             selectedBorderColor = colorResource(id = R.color.big_btn_active),
             enabled = true,
             selected = isSelected
-        ))
+        )
+    )
 }

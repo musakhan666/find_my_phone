@@ -2,6 +2,7 @@ package com.gammaplay.findmyphone.utils
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Paint
 import android.util.Log
@@ -122,4 +123,15 @@ fun VolumeButtonsHandler(
             ViewCompat.removeOnUnhandledKeyEventListener(view, keyEventDispatcher)
         }
     }
+}
+
+fun isServiceRunning(context: Context, serviceClass: Class<*>): Boolean {
+    val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    @Suppress("DEPRECATION")
+    for (service in activityManager.getRunningServices(Int.MAX_VALUE)) {
+        if (serviceClass.name == service.service.className) {
+            return true
+        }
+    }
+    return false
 }

@@ -19,6 +19,8 @@ class AppStatusManager(val context: Context) {
         private const val KEY_DURATION_MODE = "duration_mode"
         private const val KEY_SENSITIVITY_LEVEL = "sensitivity_level"
         private const val KEY_FLASHLIGHT_MODE = "flashlight_mode"
+        private const val KEY_LANGUAGE = "key_language"
+
     }
 
     private val sharedPreferences: SharedPreferences =
@@ -76,7 +78,8 @@ class AppStatusManager(val context: Context) {
     }
 
     fun getFlashlightMode(): Int {
-        return sharedPreferences.getInt(KEY_FLASHLIGHT_MODE, R.string.flashlight_mode_short_blink) ?: 0
+        return sharedPreferences.getInt(KEY_FLASHLIGHT_MODE, R.string.flashlight_mode_short_blink)
+            ?: 0
     }
 
     /**
@@ -158,9 +161,39 @@ class AppStatusManager(val context: Context) {
     /**
      * Ringtone management
      */
-    fun getRingtone(): Int { return sharedPreferences.getInt(KEY_IS_RINGTONE, R.raw.cat) }
+    fun getRingtone(): Int {
+        return sharedPreferences.getInt(KEY_IS_RINGTONE, R.raw.cat)
+    }
 
-    private fun setPreference(key: String, value: String) { sharedPreferences.edit().putString(key, value).apply() }
+    private fun setPreference(key: String, value: String) {
+        sharedPreferences.edit().putString(key, value).apply()
+    }
 
-    fun setRingTone(ringtone: Int) { sharedPreferences.edit().putInt(KEY_IS_RINGTONE, ringtone).apply() }
+    fun setRingTone(ringtone: Int) {
+        sharedPreferences.edit().putInt(KEY_IS_RINGTONE, ringtone).apply()
+    }
+
+    fun setLanguage(lang: Int) {
+        val language = getLanguageCode(context.getString(lang))
+        sharedPreferences.edit().putString(KEY_LANGUAGE, language).apply()
+    }
+
+    fun getLanguage(): String {
+        return sharedPreferences.getString(KEY_LANGUAGE, "en") ?: "en"
+    }
+
+    fun getLanguageCode(langauge: String): String {
+        return when (langauge) {
+            "English" -> "en"
+            "Spanish" -> "es"
+            "French" -> "fr"
+            "German" -> "de"
+            "Italian" -> "it"
+            "Polish" -> "pl"
+            "Russian" -> "ru"
+            "Swedish" -> "sv"
+            "Czech" -> "cs"
+            else -> "en" // Default to English if none match
+        }
+    }
 }

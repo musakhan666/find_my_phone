@@ -102,6 +102,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
     // Activation Settings
     private var activationType: String = "clap"
     private var keywords: String? = null
+    private var language: String = "en"
     private var vibrationMode: Int? = null
     private var flashlightMode: Int? = null
     private var sensitivityLevel: Int? = null
@@ -150,42 +151,6 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
         sendBroadcast(intent)
     }
 
-    private fun reinitialize() {
-        // Initialize Speech Recognizer
-        initializeSpeechRecognizer()
-
-        // Initialize Recognition Intent
-        initializeRecognitionIntent()
-        when (activationType) {
-            "none" -> {
-                stopAllDetection()
-            }
-
-            "clap" -> {
-                if (!isClapDetectionActive) {
-                    startClapDetection()
-                }
-            }
-
-            "speech" -> {
-                if (!isSpeechDetectionActive) {
-                    startSpeechDetection()
-                }
-            }
-
-            "both" -> {
-                if (!isClapDetectionActive && !isSpeechDetectionActive) {
-                    startClapDetection()
-                    scheduleSwitchToSpeech()
-                }
-            }
-
-            else -> {
-                Log.e(TAG, "Unknown activation type: $activationType")
-            }
-        }
-
-    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -229,7 +194,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
             isRecording = true
             Thread { detectClaps() }.start() // Start the clap detection in a separate thread
             isClapDetectionActive = true
-            Log.d(TAG, "Clap detection started after 4 seconds delay")
+            Log.d(TAG, "Clap detection started")
         }, 500) // Delay execution by 2000 milliseconds (2 seconds)
     }
 
@@ -244,9 +209,10 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
             setContent {
                 RippleEffectOverlayScreen {
                     removeOverlay()
-                    restartService(context)
                     // Always bring the app to the foreground when the overlay appears
                     openApp(context)
+                    restartService(context)
+
 
                 }
             }
@@ -277,7 +243,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
     // Function to remove the overlay
     private fun removeOverlay() {
         contentView?.let {
-            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             windowManager.removeView(it)
             contentView = null
         }
@@ -414,7 +380,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
                 this.description = description
             }
             val notificationManager: NotificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
 
@@ -437,6 +403,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
      * Initialize the SpeechRecognizer and set the RecognitionListener.
      */
     private fun initializeSpeechRecognizer() {
+        muteSpeechRecognizerMicBeepSound(true, context = this@DetectionServiceForeground)
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
                 setRecognitionListener(mRecognitionListener)
@@ -453,16 +420,17 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
      */
     private fun initializeRecognitionIntent() {
 
+        language = appStatusManager.getLanguage()
 
         recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
             putExtra(
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
             )
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
-        Log.d(TAG, "Recognition Intent initialized")
+        Log.d(TAG, "Recognition Intent initialized - lang $language")
     }
 
     /**
@@ -497,6 +465,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
      */
     private fun startSpeechDetection() {
         Log.d(TAG, "Starting speech detection")
+
         isSpeechDetectionActive = true
         if (isDeviceFound) return
         resetSpeechRecognizer()
@@ -636,7 +605,7 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
         // Start the service again after a short delay (optional)
         Handler(Looper.getMainLooper()).postDelayed({
             context.startService(restartIntent)
-        }, 500) // Delay restart by few seconds
+        }, 0) // Delay restart by few seconds
     }
 
     /**
@@ -674,6 +643,8 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
      */
     private fun stopAllFunctions() {
         Log.d(TAG, "Stopping all functionalities")
+        muteSpeechRecognizerMicBeepSound(false, context = this@DetectionServiceForeground)
+
         stopAllDetection()
         stopRingtone()
         handler.removeCallbacksAndMessages(null)
@@ -906,31 +877,48 @@ class DetectionServiceForeground : LifecycleService(), SavedStateRegistryOwner {
 
         override fun onResults(results: Bundle?) {
             Log.d(TAG, "SpeechRecognizer results received")
+
             results?.let { resultBundle ->
                 val matches = resultBundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                matches?.let { resultList ->
-                    resultList.forEach { recognizedText ->
-                        Log.d(TAG, "Recognized speech: $recognizedText")
 
-                        if (keywords?.equals(recognizedText, ignoreCase = true) == true) {
-                            Log.d(TAG, "Keyword or phrase detected in speech")
-                            muteSpeechRecognizerMicBeepSound(false)
-                            onDetection()
-                            return@forEach
-                        }
+                matches?.forEach { recognizedText ->
+
+                    Log.d(TAG, "Recognized speech: $recognizedText - $keywords")
+
+                    // Check for an exact match with any keyword or phrase
+                    if (recognizedText.equals(keywords?.trim(), ignoreCase = true)) {
+                        Log.d(TAG, "Exact phrase or keyword detected: $recognizedText")
+                        onDetection()
+                        return@forEach // Exit loop after detection to avoid multiple triggers
                     }
                 }
             }
-            startListening() // Restart listening after results
+//            startListening() // Restart listening after results
         }
+
 
         override fun onPartialResults(partialResults: Bundle?) {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
-    private fun muteSpeechRecognizerMicBeepSound(mute: Boolean) {
-        val manager = getSystemService(AUDIO_SERVICE) as AudioManager
-        manager.setStreamMute(AudioManager.STREAM_NOTIFICATION, mute)
+    private fun muteSpeechRecognizerMicBeepSound(mute: Boolean, context: Context) {
+        val audioManager: AudioManager = context.getSystemService(AUDIO_SERVICE) as AudioManager
+
+        if (mute) {
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_NOTIFICATION,
+                AudioManager.ADJUST_MUTE,
+                0
+            )
+        } else {
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_NOTIFICATION,
+                AudioManager.ADJUST_UNMUTE,
+                0
+            )
+        }
+
+
     }
 
     /**

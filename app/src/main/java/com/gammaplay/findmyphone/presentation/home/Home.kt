@@ -690,6 +690,7 @@ fun TextFieldWithButton(
     onDismiss: () -> Unit
 ) {
     val textFieldValue by remember { homeViewModel.textFieldValue }
+    val context = LocalContext.current
 
     OutlinedTextField(
         value = textFieldValue,
@@ -717,7 +718,7 @@ fun TextFieldWithButton(
 
     Button(
         onClick = {
-            homeViewModel.submit(textFieldValue)
+            homeViewModel.submit(textFieldValue, context = context)
             onDismiss()
         },
         modifier = Modifier
